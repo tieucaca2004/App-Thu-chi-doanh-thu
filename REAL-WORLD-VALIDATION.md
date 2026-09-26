@@ -8,7 +8,40 @@ Ngày: 2026-09-26 · Nhánh: `claude/gallant-pascal-jphd3b`
 
 ---
 
-# PHASE 3 — UNLOCK REAL-WORLD VALIDATION (trạng thái mới nhất)
+# PHASE 4 — REAL DATA EXECUTION & PRODUCTION GATE (trạng thái mới nhất)
+
+> **Production Gate: NOT READY.** Phase 4 không chạy được bước thật nào: dataset thật của Founder chưa được cung cấp
+> và các credential bên ngoài vẫn thiếu. Code **FROZEN** tại `592c95d`; không có thay đổi code nào vì không có bằng chứng FAIL thực tế.
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Baseline | `592c95d`, working tree sạch, `pytest` **118/118 PASS** |
+| Preflight | Claude **BLOCKED** (`ANTHROPIC_API_KEY`) · Zalo OA **BLOCKED** (6 biến `ZALO_*`/`FOUNDER_ZALO_USER_ID`) · Zalo webhook **BLOCKED** (`PUBLIC_BASE_URL`, `ZALO_OA_SECRET_KEY`) · Report download **BLOCKED** (`PUBLIC_BASE_URL`, `REPORT_LINK_SECRET` mặc định) · STT **BLOCKED** (`STT_URL`) · Revenue source **CONFIGURED** (`pos_closing`) · ffmpeg **CONFIGURED** (6.1.1, container phiên này) |
+| Database | **NOT RUN**: `data/founder.db` không tồn tại (chưa có tin nhắn thật nào được xử lý) |
+| Dataset thật | `validation/real/`: **0 voice, 0 bill, 0 POS, không có `cases.json`** |
+| `realval run` | `NOT RUN — validation/real/cases.json does not exist` |
+| `realval trace` | `NOT RUN — database data/founder.db does not exist` |
+| .gitignore | đã kiểm: voice, bill, `cases.json`, `out/`, `.env` đều bị ignore |
+| Secrets trong git | không có `.env` được track; quét `sk-ant-…`/token: không thấy |
+
+| Area | Cases | PASS | FAIL | PARTIAL | NOT RUN | BLOCKED |
+|------|------:|-----:|-----:|--------:|--------:|--------:|
+| Automated tests (synthetic) | 118 | 118 | 0 | 0 | 0 | 0 |
+| Real voice | 10 | 0 | 0 | 0 | 10 | 0 |
+| Real bills | 20 | 0 | 0 | 0 | 20 | 0 |
+| Real POS | 1 | 0 | 0 | 0 | 1 | 0 |
+| Revenue reconciliation (real) | 1 | 0 | 0 | 0 | 1 | 0 |
+| Price history (real) | 0 | 0 | 0 | 0 | — | — |
+| Traceability (real) | 0 | 0 | 0 | 0 | — | — |
+| Chatbot grounding (real) | 6 | 0 | 0 | 0 | 6 | 0 |
+| Real Zalo E2E | 7 | 0 | 0 | 0 | 0 | 7 |
+
+Bug mới trong Phase 4: **không có** (không có dữ liệu thật để phát sinh bằng chứng).
+Real accuracy: voice 0/0, bills 0/0, POS 0/0.
+
+---
+
+# PHASE 3 — UNLOCK REAL-WORLD VALIDATION
 
 > **Kết luận Phase 3: NOT PRODUCTION READY.** Không có dữ liệu thật nào được chạy: vẫn thiếu mọi credential
 > (Claude, Zalo OA, STT, PUBLIC_BASE_URL) và chưa có voice/bill/POS thật của Founder.
