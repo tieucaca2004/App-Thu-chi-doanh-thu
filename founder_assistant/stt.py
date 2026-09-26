@@ -39,7 +39,7 @@ def to_wav(audio: bytes, src_ext: str, ffmpeg: str | None = None, timeout: float
     with tempfile.TemporaryDirectory() as d:
         src, dst = Path(d) / f"in{src_ext}", Path(d) / "out.wav"
         src.write_bytes(audio)
-        r = subprocess.run([ffmpeg, "-nostdin", "-y", "-i", str(src), "-ac", "1", "-ar", "16000", str(dst)],
+        r = subprocess.run([ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(src), "-ac", "1", "-ar", "16000", str(dst)],
                            capture_output=True, timeout=timeout)
         if r.returncode != 0 or not dst.exists():
             raise STTUnavailable("Không chuyển đổi được file âm thanh: " + r.stderr.decode(errors="ignore")[-300:])

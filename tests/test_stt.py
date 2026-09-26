@@ -64,3 +64,28 @@ def test_missing_ffmpeg_is_a_clear_error(monkeypatch):
     t = WhisperHTTPTranscriber("https://x", sleep=lambda s: None)
     with pytest.raises(STTUnavailable, match="ffmpeg"):
         t.transcribe(b"a", "v.amr", "audio/amr")
+
+
+# BUG-013 (found by running real ffmpeg): error text must be ffmpeg's actual error, not its version banner.
+# These run the REAL ffmpeg binary when installed; skipped otherwise (never faked).
+needs_ffmpeg = pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None, reason="ffmpeg not installed")
+
+
+@needs_ffmpeg
+def test_real_ffmpeg_error_is_readable():
+    from founder_assistant.stt import to_wav
+    with pytest.raises(STTUnavailable) as e:
+        to_wav(b"not audio at all", ".aac")
+    assert "libpostproc" not in str(e.value) and "Copyright" not in str(e.value)
+    assert "Invalid data" in str(e.value) or "Error" in str(e.value)
+
+
+@needs_ffmpeg
+def test_real_ffmpeg_aac_to_wav(tmp_path):
+    import io, subprocess, wave
+    from founder_assistant.stt import to_wav
+    src = tmp_path / "gen.aac"  # generated tone, NOT a Zalo/Founder recording
+    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                    "sine=frequency=440:duration=1", "-c:a", "aac", str(src)], check=True)
+    w = wave.open(io.BytesIO(to_wav(src.read_bytes(), ".aac")))
+    assert (w.getframerate(), w.getnchannels()) == (16000, 1)

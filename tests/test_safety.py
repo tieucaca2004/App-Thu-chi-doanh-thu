@@ -374,3 +374,16 @@ def test_consistent_x10_misread_is_held(h):
     res = h.send(extraction(items=[item("thịt heo", 5, "kg", 540000, evidence="5kg thịt heo 540k", amount_text="540k")]),
                  text="5kg thịt heo 540k")
     assert res.status == "confirmed"
+
+
+# ------------------------------------------------------------ §24 Zalo reply echoes what was recorded
+def test_reply_lists_recorded_lines(h):
+    res = h.send(extraction(items=[item("Thịt heo", 5, "ký", 450000, evidence="5 ký thịt heo 450 ngàn", amount_text="450 ngàn"),
+                                   item("Rau", None, None, None, evidence="rau")]), text="5 ký thịt heo 450 ngàn, rau")
+    assert "Thịt heo — 5kg — 450.000đ" in res.reply and "Rau — UNKNOWN" in res.reply
+
+
+def test_uncertain_reply_says_so(h):
+    res = h.send(extraction(items=[item("đi chợ", None, None, 1200000, amount_text="một triệu hai",
+                                        evidence="đi chợ hết khoảng một triệu hai")]), text="đi chợ hết khoảng một triệu hai")
+    assert "Tôi chưa chắc giá trị này. Vui lòng xác nhận." in res.reply and not res.reply.startswith("✅")

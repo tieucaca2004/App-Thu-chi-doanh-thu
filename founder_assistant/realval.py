@@ -47,6 +47,7 @@ REQUIRED = {
     "Zalo OA": ["ZALO_APP_ID", "ZALO_OA_SECRET_KEY", "ZALO_ACCESS_TOKEN", "ZALO_REFRESH_TOKEN", "ZALO_APP_SECRET",
                 "FOUNDER_ZALO_USER_ID"],
     "Report download": ["PUBLIC_BASE_URL", "REPORT_LINK_SECRET"],
+    "Zalo webhook": ["PUBLIC_BASE_URL", "ZALO_OA_SECRET_KEY"],
     "STT": ["STT_URL"],
     "Revenue source": ["PRIMARY_REVENUE_SOURCE"],
 }
@@ -82,6 +83,17 @@ def preflight(ping: bool = True) -> dict:
                 out["Zalo OA"]["status"] = "ERROR"
         except Exception as exc:  # noqa: BLE001
             out["Zalo OA"].update(status="ERROR", ping=type(exc).__name__)
+    if out["Zalo webhook"]["status"] == "CONFIGURED":
+        # unsigned POST must be rejected: proves the public endpoint is up AND signature checking is on
+        url = os.environ["PUBLIC_BASE_URL"].rstrip("/") + "/webhook/zalo"
+        try:
+            code = httpx.post(url, json={"event_name": "preflight", "timestamp": "0"}, timeout=20).status_code
+            out["Zalo webhook"]["ping"] = ("OK (401 on unsigned request; confirm this URL is set in Zalo developer console)"
+                                           if code == 401 else f"unexpected HTTP {code}")
+            if code != 401:
+                out["Zalo webhook"]["status"] = "ERROR"
+        except Exception as exc:  # noqa: BLE001
+            out["Zalo webhook"].update(status="ERROR", ping=type(exc).__name__)
     if out["Report download"]["status"] == "CONFIGURED":
         try:
             ok = httpx.get(os.environ["PUBLIC_BASE_URL"].rstrip("/") + "/health", timeout=20).status_code == 200
@@ -496,11 +508,11 @@ def main(argv: list[str] | None = None) -> int:
     pf = sub.add_parser("preflight")
     pf.add_argument("--no-ping", action="store_true")
     rn = sub.add_parser("run")
-    rn.add_argument("cases")
-    rn.add_argument("--out", default="validation/out")
+    rn.add_argument("cases", nargs="?", default="validation/real/cases.json")
+    rn.add_argument("--out", default=None, help="default: <cases dir>/out")
     tr = sub.add_parser("trace")
     tr.add_argument("--db", default=str(Settings().db_path))
-    tr.add_argument("--day", required=True)
+    tr.add_argument("--day", default=None, help="default: today (TIMEZONE)")
     a = ap.parse_args(argv)
     if a.cmd == "preflight":
         res = preflight(ping=not a.no_ping)
@@ -509,10 +521,21 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if all(v["status"] == "CONFIGURED" for v in res.values()) else 2
     if a.cmd == "run":
         spec_path = Path(a.cases)
-        payload = run_cases(json.loads(spec_path.read_text()), spec_path.parent, Path(a.out))
-        print((Path(a.out) / "RESULTS.md").read_text())
+        if not spec_path.exists():
+            print(f"NOT RUN — {spec_path} does not exist (see validation/real/README.md)")
+            return 3
+        out = Path(a.out) if a.out else spec_path.parent / "out"
+        run_cases(json.loads(spec_path.read_text()), spec_path.parent, out)
+        print((out / "RESULTS.md").read_text())
         return 0
-    items = trace_day(DB(a.db), a.day)
+    day = a.day or datetime.now(Settings().tz).date().isoformat()
+    if not Path(a.db).exists():
+        print(f"NOT RUN — database {a.db} does not exist")
+        return 3
+    items = trace_day(DB(a.db), day)
+    if not [i for i in items if i["value"] is not None]:
+        print(f"NOT RUN — no report numbers for {day} in {a.db}")
+        return 3
     for i in items:
         print(("PASS " if i["ok"] else "FAIL ") + f"{i['number']}: {fmt_vnd(i['value'])}  {i['chains']}")
     return 0 if all(i["ok"] for i in items) else 1

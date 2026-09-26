@@ -6,6 +6,66 @@
 
 Ngày: 2026-09-26 · Nhánh: `claude/gallant-pascal-jphd3b`
 
+---
+
+# PHASE 3 — UNLOCK REAL-WORLD VALIDATION (trạng thái mới nhất)
+
+> **Kết luận Phase 3: NOT PRODUCTION READY.** Không có dữ liệu thật nào được chạy: vẫn thiếu mọi credential
+> (Claude, Zalo OA, STT, PUBLIC_BASE_URL) và chưa có voice/bill/POS thật của Founder.
+> Đã mở khóa được: **quyết định nguồn doanh thu của Founder** và **ffmpeg** (trong container này).
+
+| Mục (§27) | Trạng thái |
+|---|---|
+| Baseline commit | `de7514c`: working tree sạch, `pytest` **113/113 PASS** (đã xác nhận trước khi làm) |
+| Validation commit | commit Phase 3 trên nhánh này (xem `git log`); `pytest` **118/118 PASS**, toàn bộ synthetic |
+| Credentials | `ANTHROPIC_API_KEY` **MISSING** · Zalo (`ZALO_*`, `FOUNDER_ZALO_USER_ID`) **MISSING** · `PUBLIC_BASE_URL` **MISSING** · `REPORT_LINK_SECRET` còn mặc định · `STT_URL` **MISSING** → **BLOCKED** |
+| Founder decision | **`PRIMARY_REVENUE_SOURCE=pos_closing`**: Founder xác nhận ngày 2026-09-26. POS chốt ca là doanh thu chính; bill lẻ chỉ để đối chiếu, phân tích món, phát hiện chênh lệch. Ghi trong `.env` (local, gitignored) và `.env.example`. |
+| ffmpeg | **PASS**: `ffmpeg version 6.1.1-3ubuntu5` cài trong container phiên này (container tạm, **server production phải cài riêng**). Đã chạy thật: AAC → WAV 16 kHz mono ✓, M4A → WAV ✓, có decoder AMR-NB/WB; *file AMR chưa thử* (build không có encoder để tạo file mẫu). |
+| STT | **BLOCKED** (không có `STT_URL`). Chỉ bước chuyển định dạng (ffmpeg) đã chạy thật, trên âm thanh **tự tạo**, không phải giọng Founder. |
+| Zalo | **BLOCKED**. Preflight giờ kiểm cấu hình webhook: POST không chữ ký tới `PUBLIC_BASE_URL/webhook/zalo` phải trả 401. Đã chạy thử với server local thật → OK; **chưa** chạy qua domain public / Zalo thật. URL webhook trong Zalo developer console phải được xác nhận thủ công. |
+| Claude | **BLOCKED** (không có `ANTHROPIC_API_KEY`). Không dùng credential của phiên làm việc này để giả lập "Claude thật". |
+| Dữ liệu thật | `validation/real/` đã tạo. **Repository PUBLIC** nên mọi dữ liệu thật trong đó bị `.gitignore` (đã kiểm: chỉ README được track). Hiện có **0 voice, 0 bill, 0 POS**. |
+
+## Phase 3 metrics (§25): chỉ đếm test đã chạy thật, NOT RUN/BLOCKED không nằm trong mẫu số
+
+```text
+VOICE                   0/0 PASS   (NOT RUN: 0 recordings; STT + Claude BLOCKED)
+IMAGE                   0/0 PASS   (NOT RUN: 0 bills; Claude BLOCKED)
+MONEY                   0/0 PASS   (NOT RUN)
+PRODUCT                 0/0 PASS   (NOT RUN)
+UNIT                    0/0 PASS   (NOT RUN)
+TOTAL                   0/0 PASS   (NOT RUN)
+PRICE CHANGE            0/0 PASS   (NOT RUN)
+DUPLICATE               0/0 PASS   (NOT RUN)
+REVENUE RECONCILIATION  0/0 PASS   (NOT RUN: chưa có POS + bill thật cùng ngày)
+TRACEABILITY            0/0 PASS   (NOT RUN: `realval trace` → "NOT RUN — database … does not exist")
+DAILY REPORT (real)     NOT RUN
+ZALO E2E (real)         BLOCKED
+```
+
+## Phase 3 changes (tối thiểu, mỗi thay đổi có lý do)
+
+| ID | Evidence | Layer | Thay đổi | Regression | Status |
+|---|---|---|---|---|---|
+| BUG-013 | **Chạy ffmpeg thật** với file hỏng: thông báo lỗi lưu vào message là banner phiên bản ffmpeg (`12.100 / 4. 12.100 libpostproc`) thay vì nguyên nhân | STT | Thêm `-hide_banner -loglevel error` | `test_real_ffmpeg_error_is_readable`, `test_real_ffmpeg_aac_to_wav` (chạy ffmpeg thật, tự skip nếu máy không có ffmpeg, không giả lập) | FIXED |
+| PF-1 | Spec Phase 3 §2 yêu cầu preflight kiểm cấu hình webhook | tooling | Dòng `Zalo webhook` trong preflight | `test_preflight_checks_webhook_config` | DONE |
+| PF-2 | Spec §11/§22 gọi `realval run` / `realval trace` không đối số | tooling | Mặc định `validation/real/cases.json`, trace mặc định hôm nay; thiếu dữ liệu → in `NOT RUN`, exit 3 | chạy tay (xem trên) | DONE |
+| RP-1 | Spec §24: phản hồi Zalo phải cho thấy đã ghi gì ("Thịt heo — 5kg — 450.000đ"); khi chưa chắc phải nói "Tôi chưa chắc giá trị này. Vui lòng xác nhận." Phản hồi cũ chỉ có tổng + số mặt hàng, nên Founder không thấy dòng nào bị đọc sai | PIPELINE (reply) | Liệt kê từng dòng đã ghi (tối đa 10); câu cảnh báo khi chưa chắc | `test_reply_lists_recorded_lines`, `test_uncertain_reply_says_so` | DONE |
+
+Không có thay đổi nào khác ở validation, normalization, database hay report. Không có bug nào từ **dữ liệu thật**, vì chưa có dữ liệu thật.
+
+## Việc cần làm để chạy real validation (theo thứ tự)
+1. Điền `.env` trên máy/server có mạng: `ANTHROPIC_API_KEY`, `ZALO_*`, `FOUNDER_ZALO_USER_ID`, `STT_URL`(+`STT_API_KEY`), `PUBLIC_BASE_URL`, `REPORT_LINK_SECRET` (giá trị ngẫu nhiên). Cài ffmpeg trên server.
+2. `python -m founder_assistant.realval preflight` → mọi dòng `CONFIGURED` + ping OK.
+3. Founder ghi 10 voice + chụp 20 bill + 1 chốt ca POS (cùng ngày với vài bill bán lẻ) vào `validation/real/`; **Founder** điền `validation/real/cases.json` (ground truth không lấy từ OCR/AI).
+4. `python -m founder_assistant.realval run` → dán metrics từ `validation/real/out/RESULTS.md` vào mục Phase 3 metrics; mỗi FAIL → BUG-ID theo §14.
+5. `python -m founder_assistant.realval trace --db validation/real/out/data/founder.db --day <ngày>` (≥ 10 con số, SHA-256 khớp); mở XLSX kiểm bằng mắt.
+6. Zalo E2E thật trên OA test (text, ảnh, voice, gửi trùng, nội dung rác, AI lỗi, link báo cáo có chữ ký) với **database riêng** (`DATA_DIR` khác production).
+
+---
+
+# PHASE 2 (lưu lại để đối chiếu)
+
 ## 1. Environment
 
 | Mục | Giá trị |
@@ -98,7 +158,7 @@ REVENUE RECONCILIATION (thật) Correct: NOT RUN
 - POS 5.000.000 + bill 5.000.000 → doanh thu 5.000.000, không phải 10.000.000.
 - POS 5.000.000 vs bill 4.850.000 → alert *"POS: 5.000.000đ; Bill evidence: 4.850.000đ; Chênh lệch: 150.000đ. Cần Founder xác nhận"*, số không bị sửa.
 - Chưa cấu hình và ngày có cả hai nguồn → doanh thu **UNKNOWN** + alert critical (không tự chọn).
-- **Việc của Founder**: xác nhận nguồn doanh thu chính (hiện `PRIMARY_REVENUE_SOURCE` chưa đặt).
+- ~~Việc của Founder: xác nhận nguồn doanh thu chính~~ → **Phase 3: Founder đã chọn `pos_closing`.**
 
 ## 12. Daily report
 ```text
@@ -147,7 +207,7 @@ BUG-001 … BUG-012: đã sửa, có regression test, toàn bộ suite **113 pas
 4. Đối chiếu nguồn cho ảnh dựa trên OCR do chính Claude chép lại: nếu Claude đọc sai *nhất quán* thì kiểm tra nội bộ không bắt được, trừ khi giá lệch ≥ 3× (BUG-010). Chỉ ground truth thật mới đo được độ chính xác này.
 5. Chưa đo tỷ lệ "cảnh báo nhầm" (Founder phải xác nhận nhiều quá) trên dữ liệu thật: từ ước lượng ("hơn", "gần"…) và ngưỡng 3× có thể cần chỉnh.
 6. Voice có câu tự sửa ("ba ký, à không, bốn ký") phụ thuộc hoàn toàn vào Claude, không có kiểm tra xác định.
-7. `PRIMARY_REVENUE_SOURCE` chưa được Founder xác nhận.
+7. ~~`PRIMARY_REVENUE_SOURCE` chưa được Founder xác nhận.~~ → Phase 3: `pos_closing`.
 
 ## 17. Production readiness
 
@@ -163,7 +223,9 @@ BUG-001 … BUG-012: đã sửa, có regression test, toàn bộ suite **113 pas
 | Revenue reconciliation | **NOT RUN** (synthetic PASS) |
 | Daily report | **NOT RUN** (synthetic PASS) |
 | Source traceability | **NOT RUN** (công cụ sẵn sàng) |
-| Automated tests | **PASS** (113/113) |
+| Automated tests | **PASS** (Phase 3: 118/118, synthetic) |
+| Founder revenue decision | **DONE**: `pos_closing` (Phase 3) |
+| ffmpeg | **PASS trong container này**; server production chưa kiểm |
 | Known critical bugs | Không có bug mở đã biết, nhưng dữ liệu thật chưa được thử |
 
 ## **NOT PRODUCTION READY**

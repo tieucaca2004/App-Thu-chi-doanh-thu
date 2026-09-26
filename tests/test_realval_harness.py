@@ -98,3 +98,10 @@ def test_harness_report_check_can_fail(tmp_path):
     sp["expected_reports"][0]["expense"] = 999
     p = run_cases(sp, tmp_path, tmp_path / "out", extractor=ex, transcriber=stt)
     assert p["metrics"]["report"] == "FAIL" and p["reports"][0]["checks"]["expense"] is False
+
+
+def test_preflight_checks_webhook_config(monkeypatch):
+    monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
+    monkeypatch.setenv("ZALO_OA_SECRET_KEY", "x")
+    res = preflight(ping=False)
+    assert res["Zalo webhook"]["status"] == "BLOCKED" and "PUBLIC_BASE_URL" in res["Zalo webhook"]["missing"]

@@ -66,7 +66,7 @@ Nhóm chi: `ingredient, packaging, gas, transport, platform_fee, salary, utiliti
 
 ```bash
 python -m founder_assistant.realval preflight                       # credential nào thiếu → BLOCKED
-python -m founder_assistant.realval run validation/cases.json       # chấm PASS/PARTIAL/FAIL theo ground truth
+python -m founder_assistant.realval run       # chấm PASS/PARTIAL/FAIL theo ground truth
 python -m founder_assistant.realval trace --db data/founder.db --day 2026-10-01   # truy vết từng con số tới file gốc
 ```
 

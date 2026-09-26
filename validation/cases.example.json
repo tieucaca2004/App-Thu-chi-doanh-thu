@@ -1,11 +1,11 @@
 {
- "_readme": "Xem validation/README.md. Thay mọi TODO bằng giá trị đọc tận mắt từ chứng từ gốc (null nếu chứng từ không ghi). Copy file này thành validation/cases.json.",
+ "_readme": "Xem validation/README.md. Thay mọi TODO bằng giá trị đọc tận mắt từ chứng từ gốc (null nếu chứng từ không ghi). Copy file này thành validation/real/cases.json (repo PUBLIC: file đó bị gitignore).",
  "primary_revenue_source": "pos_closing",
  "cases": [
   {
    "id": "V01",
    "kind": "voice",
-   "file": "cases/voice/v01.m4a",
+   "file": "voice/v01.m4a",
    "sent_at": "2026-10-01 07:00",
    "said": "Hôm nay mua năm ký thịt heo hết bốn trăm năm chục ngàn.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -26,7 +26,7 @@
   {
    "id": "V02",
    "kind": "voice",
-   "file": "cases/voice/v02.m4a",
+   "file": "voice/v02.m4a",
    "sent_at": "2026-10-01 07:30",
    "said": "Lấy thêm ba ký tôm, ba trăm sáu chục.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -46,7 +46,7 @@
   {
    "id": "V03",
    "kind": "voice",
-   "file": "cases/voice/v03.m4a",
+   "file": "voice/v03.m4a",
    "sent_at": "2026-10-01 08:00",
    "said": "Rau hết một trăm hai.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -65,7 +65,7 @@
   {
    "id": "V04",
    "kind": "voice",
-   "file": "cases/voice/v04.m4a",
+   "file": "voice/v04.m4a",
    "sent_at": "2026-10-01 08:30",
    "said": "Mua hai thùng nước ngọt hết ba trăm.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -85,7 +85,7 @@
   {
    "id": "V05",
    "kind": "voice",
-   "file": "cases/voice/v05.m4a",
+   "file": "voice/v05.m4a",
    "sent_at": "2026-10-01 09:00",
    "said": "Hôm nay đi chợ hết khoảng một triệu hai.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -96,7 +96,7 @@
   {
    "id": "V06",
    "kind": "voice",
-   "file": "cases/voice/v06.m4a",
+   "file": "voice/v06.m4a",
    "sent_at": "2026-10-01 09:30",
    "said": "Mua ba ký ba chỉ giá chín mươi lăm ngàn một ký.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -116,7 +116,7 @@
   {
    "id": "V07",
    "kind": "voice",
-   "file": "cases/voice/v07.m4a",
+   "file": "voice/v07.m4a",
    "sent_at": "2026-10-01 10:00",
    "said": "Mua thêm năm ký rau cải.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -136,7 +136,7 @@
   {
    "id": "V08",
    "kind": "voice",
-   "file": "cases/voice/v08.m4a",
+   "file": "voice/v08.m4a",
    "sent_at": "2026-10-01 10:30",
    "said": "Thịt heo hôm nay tăng giá, lấy hai ký hết hai trăm ngàn.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -156,7 +156,7 @@
   {
    "id": "V09",
    "kind": "voice",
-   "file": "cases/voice/v09.m4a",
+   "file": "voice/v09.m4a",
    "sent_at": "2026-10-01 11:00",
    "said": "Mua ba ký, à không, bốn ký cá lóc hết ba trăm hai.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -176,7 +176,7 @@
   {
    "id": "V10",
    "kind": "voice",
-   "file": "cases/voice/v10.m4a",
+   "file": "voice/v10.m4a",
    "sent_at": "2026-10-01 11:30",
    "said": "Mua hai ký mực hai trăm tám, một bó hành mười ngàn, gas năm trăm ngàn.",
    "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
@@ -205,7 +205,7 @@
   {
    "id": "B01",
    "kind": "image",
-   "file": "cases/bills/b01.jpg",
+   "file": "bills/b01.jpg",
    "sent_at": "2026-10-01 12:00",
    "conditions": "bill mua thịt, chụp thật, không chỉnh sửa",
    "expected": {
@@ -227,7 +227,7 @@
   {
    "id": "B01-resend",
    "kind": "image",
-   "file": "cases/bills/b01.jpg",
+   "file": "bills/b01.jpg",
    "sent_at": "2026-10-01 12:05",
    "tags": [
     "duplicate"
@@ -239,7 +239,7 @@
   {
    "id": "POS01",
    "kind": "image",
-   "file": "cases/bills/pos01.jpg",
+   "file": "bills/pos01.jpg",
    "sent_at": "2026-10-01 21:00",
    "expected": {
     "doc_type": "REVENUE_REPORT",

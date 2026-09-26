@@ -7,3 +7,6 @@ data/
 # real Founder data (bills, voice) and validation outputs stay private
 validation/cases/
 validation/out/
+# REPOSITORY IS PUBLIC: real Founder data never goes to git (only the README)
+validation/real/*
+!validation/real/README.md

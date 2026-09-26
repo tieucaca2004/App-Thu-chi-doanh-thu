@@ -306,6 +306,20 @@ class Pipeline:
         self._alert(ch.new_date, "warning" if strong or ch.diff > 0 else "info",
                     "PRICE_UP" if ch.diff > 0 else "PRICE_DOWN", text, message_id, "price_history", ch.new_ref)
 
+    @staticmethod
+    def _item_lines(doc: CheckedDocument, limit: int = 10) -> list[str]:
+        """Echo exactly what was recorded, so the Founder can spot a misread line: 'Thịt heo — 5kg — 450.000đ'."""
+        out = []
+        for ci in doc.items[:limit]:
+            qty = ""
+            if ci.quantity is not None:
+                q = f"{ci.quantity:g}".replace(".", ",")
+                qty = f" — {q}{ci.unit.canonical if ci.unit else (' ' + ci.raw.unit if ci.raw.unit else '')}"
+            out.append(f"{ci.raw.name}{qty} — {fmt_vnd(ci.amount)}")
+        if len(doc.items) > limit:
+            out.append(f"… và {len(doc.items) - limit} mặt hàng khác")
+        return out
+
     def _purchase_reply(self, ex: Extraction, doc: CheckedDocument, ref: str, status: str,
                         reason: str | None, changes: list[PriceChange], new_products: list[str] = ()) -> str:
         label = DOC_LABEL[ex.doc_type]
@@ -313,12 +327,15 @@ class Pipeline:
         lines = []
         if status == "confirmed":
             lines.append(f"✅ Đã ghi nhận {label} ({ref}).")
+            lines += self._item_lines(doc)
             lines.append(f"Tổng: {fmt_vnd(total) if total is not None else 'UNKNOWN (thiếu giá)'}")
             if doc.items:
                 lines.append(f"{len(doc.items)} mặt hàng.")
         else:
             lines.append(f"⚠️ Tôi đọc được {label} ({ref}) nhưng chưa đưa vào báo cáo cho đến khi xác nhận.")
+            lines.append("⚠️ Tôi chưa chắc giá trị này. Vui lòng xác nhận.")
             lines.append(f"Lý do: {reason}")
+            lines += self._item_lines(doc)
             if total is not None:
                 lines.append(f"Tổng đọc được: {fmt_vnd(total)}")
             lines.append(CONFIRM_HINT.format(ref=ref))
