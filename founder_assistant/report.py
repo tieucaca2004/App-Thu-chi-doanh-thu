@@ -30,7 +30,7 @@ def render_text(db: DB, s: DailySummary) -> str:
 
     out.append("💸 CHI")
     out.append(fmt_vnd(s.expense) if s.expense is not None else "UNKNOWN — chưa có dữ liệu")
-    for cat in ("NGUYEN_LIEU", "CHI_KHAC", "CHUA_PHAN_LOAI"):
+    for cat in CATEGORY_LABEL:
         if s.expense_by_category.get(cat):
             out.append(f"  {CATEGORY_LABEL[cat]}: {fmt_vnd(s.expense_by_category[cat])}")
     out.append("")
@@ -139,6 +139,14 @@ def build_xlsx(db: DB, s: DailySummary, path: Path) -> Path:
     ]
     if s.revenue_note:
         summary.append(["Ghi chú doanh thu", s.revenue_note, ""])
+    rec = s.extra.get("reconciliation")
+    if rec:
+        summary += [
+            ["Nguồn doanh thu chính", rec["primary"] or "CHƯA XÁC ĐỊNH", "PRIMARY_REVENUE_SOURCE"],
+            ["Đối chiếu — POS / chốt ca", _u(rec["pos_total"]), ", ".join(rec["pos_refs"])],
+            ["Đối chiếu — tổng bill lẻ", _u(rec["bill_total"]), ", ".join(rec["bill_refs"])],
+            ["Đối chiếu — chênh lệch", _u(rec["difference"]), "KHỚP" if rec["matched"] else "KHÔNG KHỚP — cần xác nhận"],
+        ]
     _sheet(wb, "SUMMARY", ["Chỉ số", "Giá trị", "Nguồn"], summary, money_cols=(2,), first=True)
 
     _sheet(wb, "PURCHASE",

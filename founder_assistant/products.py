@@ -10,21 +10,24 @@ from .db import DB
 from .textnorm import display_name, norm_key
 
 # canonical name -> (category, default_unit, aliases)
+# Aliases are TRUE SYNONYMS only (same item, same price basis). Different cuts, breeds or varieties
+# (thịt heo nạc vs ba chỉ, gà ta vs gà công nghiệp, tôm sú vs tôm thẻ, hành lá vs hành tím) are NOT
+# aliased: they become separate products, and the Founder merges them explicitly with "gộp a = b".
 SEED_PRODUCTS: dict[str, tuple[str, str | None, list[str]]] = {
-    "Thịt heo": ("thịt", "kg", ["heo", "thịt lợn", "lợn", "thit heo", "thịt heo đùi", "thịt heo nạc"]),
-    "Thịt bò": ("thịt", "kg", ["bò", "thịt bò tươi"]),
-    "Thịt gà": ("thịt", "kg", ["gà", "gà ta", "gà công nghiệp"]),
-    "Tôm": ("hải sản", "kg", ["tôm tươi"]),
+    "Thịt heo": ("thịt", "kg", ["heo", "thịt lợn", "lợn"]),
+    "Thịt bò": ("thịt", "kg", ["bò"]),
+    "Thịt gà": ("thịt", "kg", ["gà"]),
+    "Tôm": ("hải sản", "kg", []),
     "Tôm sú": ("hải sản", "kg", []),
-    "Mực": ("hải sản", "kg", ["mực ống", "mực tươi"]),
-    "Rau": ("rau củ", None, ["rau xanh", "rau các loại"]),
-    "Rau cải": ("rau củ", "kg", ["cải", "cải xanh", "cải ngọt"]),
-    "Hủ tiếu": ("tinh bột", "kg", ["hủ tiếu khô", "hủ tíu", "hu tieu"]),
-    "Trứng gà": ("trứng", None, ["trứng"]),
-    "Dầu ăn": ("gia vị", None, ["dầu"]),
+    "Tôm thẻ": ("hải sản", "kg", []),
+    "Tôm càng": ("hải sản", "kg", ["tôm càng xanh"]),
+    "Mực": ("hải sản", "kg", []),
+    "Rau": ("rau củ", None, []),
+    "Rau cải": ("rau củ", "kg", []),
+    "Hủ tiếu": ("tinh bột", "kg", ["hủ tíu"]),
+    "Trứng gà": ("trứng", None, []),
     "Nước mắm": ("gia vị", "chai", []),
     "Đường": ("gia vị", "kg", []),
-    "Hành": ("rau củ", "kg", ["hành lá", "hành tím"]),
     "Tỏi": ("rau củ", "kg", []),
     "Gas": ("chi phí", "bình", ["bình gas", "ga"]),
 }

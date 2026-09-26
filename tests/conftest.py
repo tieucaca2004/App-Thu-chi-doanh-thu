@@ -19,7 +19,7 @@ from founder_assistant.products import ProductMaster
 TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 
-def item(name, quantity=None, unit=None, amount=None, unit_price=None, evidence=None, category="NGUYEN_LIEU",
+def item(name, quantity=None, unit=None, amount=None, unit_price=None, evidence=None, category="ingredient",
          amount_text=None, unit_price_text=None):
     return ExtractedItem(name=name, quantity=quantity, unit=unit, unit_price=unit_price, amount=amount,
                          amount_text=amount_text, unit_price_text=unit_price_text, category=category,

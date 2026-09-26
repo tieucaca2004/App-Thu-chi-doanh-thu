@@ -39,6 +39,10 @@ class Settings:
     amount_tolerance_pct: float = 0.5
     max_backdate_days: int = 45
 
+    # Automatic retry of messages that failed on an infrastructure error (API down, download error...)
+    retry_interval_seconds: int = field(default_factory=lambda: int(_env("RETRY_INTERVAL_SECONDS", "600")))
+    max_attempts: int = field(default_factory=lambda: int(_env("MAX_ATTEMPTS", "3")))
+
     @property
     def tz(self) -> ZoneInfo:
         return ZoneInfo(self.timezone)

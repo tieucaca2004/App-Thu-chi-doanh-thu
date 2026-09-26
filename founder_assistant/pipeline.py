@@ -16,12 +16,12 @@ from typing import Callable
 
 from .config import Settings
 from .db import DB
-from .extraction import Extraction, ExtractionError, Extractor, PROMPT_VERSION, extraction_to_json
+from .extraction import GOODS_CATEGORIES, Extraction, ExtractionError, Extractor, PROMPT_VERSION, extraction_to_json
 from .money import amounts_match, fmt_pct, fmt_vnd
 from .pricing import PriceChange, change_for, quantity_is_unusual
 from .products import ProductMaster
 from .stt import NoTranscriber, STTUnavailable, Transcriber
-from .analytics import daily_revenue_history
+from .analytics import daily_revenue_history, day_revenue
 from .textnorm import norm_key
 from .validation import CheckedDocument, Issue, check_document, fingerprint, number_grounded
 
@@ -78,6 +78,7 @@ class Pipeline:
         now = self._iso(msg.received_at)
         mid = self.db.insert("messages", {
             "zalo_msg_id": msg.zalo_msg_id, "user_id": msg.user_id, "kind": msg.kind, "text": msg.text,
+            "media_url": msg.media_url, "media_mime": msg.media_mime,
             "received_at": now, "event_json": json.dumps(msg.event_json, ensure_ascii=False) if msg.event_json else None,
         })
         self.db.commit()
@@ -97,8 +98,10 @@ class Pipeline:
         if m is None:
             raise KeyError(message_id)
         msg = IncomingMessage(zalo_msg_id=m["zalo_msg_id"], user_id=m["user_id"], kind=m["kind"],
-                              received_at=datetime.fromisoformat(m["received_at"]), text=m["text"])
-        self.db.update("messages", message_id, {"status": "reprocessing", "error": None})
+                              received_at=datetime.fromisoformat(m["received_at"]), text=m["text"],
+                              media_url=m["media_url"], media_mime=m["media_mime"])
+        self.db.update("messages", message_id, {"status": "reprocessing", "error": None,
+                                                "attempts": (m["attempts"] or 1) + 1})
         try:
             result = self._process(message_id, msg)
         except Exception as exc:
@@ -155,10 +158,11 @@ class Pipeline:
             ex = self.extractor.extract(text=text, image=image, image_mime=mime,
                                         received_date=received.isoformat(), source_kind=source_kind)
         except ExtractionError as exc:
-            self.db.update("messages", mid, {"status": "failed", "error": str(exc)})
+            # Founder is asked to resend -> 'unreadable' is NOT auto-retried (a retry + resend would double count)
+            self.db.update("messages", mid, {"status": "unreadable", "error": str(exc)})
             self.db.commit()
             return Result(reply=f"⚠️ Chưa đọc được nội dung ({exc}). Anh/chị gửi lại giúp ảnh rõ hơn nhé.",
-                          status="failed")
+                          status="unreadable")
 
         ext_id = self.db.insert("ai_extractions", {
             "message_id": mid, "model": getattr(self.extractor, "model_name", "unknown"),
@@ -212,7 +216,7 @@ class Pipeline:
         new_products = []
         for ci in doc.items:
             pid_product = None
-            if ci.raw.category == "NGUYEN_LIEU":
+            if ci.raw.category in GOODS_CATEGORIES:
                 pid_product, created = self.products.resolve(ci.raw.name, ci.unit.canonical if ci.unit else None, now)
                 if created:
                     new_products.append(ci.raw.name)
@@ -236,7 +240,7 @@ class Pipeline:
 
         changes = self._apply_prices(pid) if status == "confirmed" else []
         self.db.commit()
-        return Result(reply=self._purchase_reply(ex, doc, ref, status, reason, changes),
+        return Result(reply=self._purchase_reply(ex, doc, ref, status, reason, changes, new_products),
                       record_ref=ref, status=status, price_changes=changes)
 
     def _apply_prices(self, purchase_id: int) -> list[PriceChange]:
@@ -280,7 +284,7 @@ class Pipeline:
                     "PRICE_UP" if ch.diff > 0 else "PRICE_DOWN", text, message_id, "price_history", ch.new_ref)
 
     def _purchase_reply(self, ex: Extraction, doc: CheckedDocument, ref: str, status: str,
-                        reason: str | None, changes: list[PriceChange]) -> str:
+                        reason: str | None, changes: list[PriceChange], new_products: list[str] = ()) -> str:
         label = DOC_LABEL[ex.doc_type]
         total = doc.stated_total if doc.stated_total is not None else doc.items_total
         lines = []
@@ -303,6 +307,8 @@ class Pipeline:
         missing = [ci.raw.name for ci in doc.items if ci.amount is None]
         if missing:
             lines.append(f"❓ Chưa có giá: {', '.join(missing)}. Nhắn thêm giá nếu cần.")
+        if new_products:
+            lines.append(f"🆕 Mặt hàng mới: {', '.join(new_products)}. Nếu trùng mặt hàng cũ, nhắn: gộp {new_products[0]} = <tên cũ>")
         unit_unknown = [ci.raw.name for ci in doc.items if ci.unit_problem]
         if unit_unknown:
             lines.append(f"❓ Chưa rõ đơn vị: {', '.join(unit_unknown)} — chưa so sánh giá.")
@@ -391,7 +397,7 @@ class Pipeline:
         if len(hist) < 3:
             return
         avg = sum(hist) / len(hist)
-        today = self.db.one("SELECT SUM(revenue) AS r FROM sales WHERE sale_date = ? AND status = 'confirmed'", (day,))["r"] or 0
+        today = day_revenue(self.db, day) or 0  # same source rule as the report — never POS + bills
         if avg and (today > avg * 2):
             self._alert(day, "warning", "REVENUE_UNUSUAL",
                         f"Doanh thu ngày {day} ({fmt_vnd(today)}) cao gấp {today / avg:.1f} lần trung bình 7 ngày ({fmt_vnd(avg)}) — B{sid}.",
@@ -521,6 +527,9 @@ class Pipeline:
         if not msg.media_url or not self.fetch_media:
             raise RuntimeError("Tin nhắn có tệp nhưng không tải được (thiếu URL).")
         data, mime = self.fetch_media(msg.media_url)
+        # the real Content-Type wins over the webhook-based guess (e.g. assumed audio/aac)
+        if mime and mime != "application/octet-stream":
+            return data, mime
         return data, msg.media_mime or mime
 
     def _store_media(self, mid: int, msg: IncomingMessage, data: bytes, mime: str | None) -> tuple[int, str]:

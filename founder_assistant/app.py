@@ -55,11 +55,36 @@ class Service:
                 result = self.pipeline.process(msg)
             except Exception:  # noqa: BLE001
                 log.exception("processing failed for %s", msg.zalo_msg_id)
-                reply = "⚠️ Có lỗi khi xử lý tin nhắn này. Dữ liệu gốc đã được lưu và sẽ được xử lý lại."
+                reply = ("⚠️ Có lỗi khi xử lý tin nhắn này. Dữ liệu gốc đã được lưu, "
+                         f"hệ thống sẽ tự thử lại (tối đa {self.s.max_attempts} lần).")
             else:
                 reply = result.reply
         if reply:
             self.zalo.send_text(msg.user_id, reply)
+
+    def retry_failed(self) -> list[dict]:
+        """Retry 'failed' messages (infrastructure errors). After max_attempts, tell the Founder once."""
+        done = []
+        rows = self.db.all("SELECT id, user_id, attempts FROM messages WHERE status = 'failed' ORDER BY id")
+        for row in rows:
+            if (row["attempts"] or 1) >= self.s.max_attempts:
+                self.db.update("messages", row["id"], {"status": "failed_final"})
+                self.db.commit()
+                self.zalo.send_text(row["user_id"], f"⚠️ Tin nhắn #{row['id']} vẫn chưa xử lý được sau "
+                                                    f"{self.s.max_attempts} lần thử. Anh/chị gửi lại giúp nhé.")
+                done.append({"message_id": row["id"], "status": "failed_final"})
+                continue
+            with self.lock:
+                try:
+                    res = self.pipeline.reprocess(row["id"])
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("retry of message %s failed: %s", row["id"], exc)
+                    done.append({"message_id": row["id"], "error": str(exc)})
+                    continue
+            if res.reply:
+                self.zalo.send_text(row["user_id"], res.reply)
+            done.append({"message_id": row["id"], "status": res.status, "ref": res.record_ref})
+        return done
 
     def report_link(self, day: str) -> str | None:
         if not self.s.public_base_url:
@@ -96,16 +121,26 @@ async def _scheduler(svc: Service) -> None:
             log.exception("daily report failed")
 
 
+async def _retry_loop(svc: Service) -> None:
+    while True:
+        await asyncio.sleep(svc.s.retry_interval_seconds)
+        try:
+            await asyncio.to_thread(svc.retry_failed)
+        except Exception:  # noqa: BLE001
+            log.exception("retry loop failed")
+
+
 def create_app(settings: Settings | None = None, service: Service | None = None, schedule: bool = True) -> FastAPI:
     holder: dict = {}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         holder["svc"] = service or Service(settings or Settings())
-        task = asyncio.create_task(_scheduler(holder["svc"])) if schedule else None
+        tasks = ([asyncio.create_task(_scheduler(holder["svc"])), asyncio.create_task(_retry_loop(holder["svc"]))]
+                 if schedule else [])
         yield
-        if task:
-            task.cancel()
+        for t in tasks:
+            t.cancel()
 
     app = FastAPI(title="AI Founder Data Assistant", lifespan=lifespan)
 
@@ -147,20 +182,8 @@ def create_app(settings: Settings | None = None, service: Service | None = None,
 
     @app.post("/jobs/reprocess-failed")
     def reprocess_failed():
-        """Retry messages that failed (API outage, network...). Replies are sent to the Founder."""
-        svc: Service = holder["svc"]
-        done = []
-        for row in svc.db.all("SELECT id, user_id FROM messages WHERE status = 'failed' ORDER BY id"):
-            with svc.lock:
-                try:
-                    res = svc.pipeline.reprocess(row["id"])
-                except Exception as exc:  # noqa: BLE001
-                    done.append({"message_id": row["id"], "error": str(exc)})
-                    continue
-            if res.reply:
-                svc.zalo.send_text(row["user_id"], res.reply)
-            done.append({"message_id": row["id"], "status": res.status, "ref": res.record_ref})
-        return {"reprocessed": done}
+        """Manual trigger of the same retry the background loop runs every RETRY_INTERVAL_SECONDS."""
+        return {"reprocessed": holder["svc"].retry_failed()}
 
     @app.get("/reports/{day}.xlsx")
     def download_report(day: str, sig: str):

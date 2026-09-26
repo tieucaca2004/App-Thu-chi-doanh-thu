@@ -36,7 +36,7 @@ _COUNT = [
 
 # raw spelling (accent-free key) -> canonical unit name
 _ALIASES: dict[str, str] = {
-    "kg": "kg", "kgs": "kg", "ki": "kg", "ky": "kg", "kilo": "kg", "kilogram": "kg",
+    "kg": "kg", "kgs": "kg", "ki": "kg", "ky": "kg", "kilo": "kg", "kilogram": "kg", "ki lo": "kg", "ki lo gam": "kg", "ki lo gram": "kg", "kilogam": "kg",
     "g": "g", "gr": "g", "gram": "g", "gam": "g",
     "lang": "lạng", "tan": "tấn", "yen": "yến",
     "l": "l", "lit": "l", "liter": "l", "litre": "l", "ml": "ml", "mililit": "ml",

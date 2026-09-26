@@ -22,7 +22,10 @@ CREATE TABLE IF NOT EXISTS messages (
     received_at     TEXT NOT NULL,          -- ISO datetime, local tz
     event_json      TEXT,                   -- raw webhook payload
     status          TEXT NOT NULL DEFAULT 'received',
-    error           TEXT
+    error           TEXT,
+    media_url       TEXT,                   -- kept so a failed download can be retried
+    media_mime      TEXT,
+    attempts        INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS media (
@@ -86,7 +89,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
     purchase_id         INTEGER NOT NULL REFERENCES purchases(id),
     product_id          INTEGER REFERENCES products(id),
     raw_name            TEXT NOT NULL,
-    category            TEXT NOT NULL,      -- NGUYEN_LIEU | CHI_KHAC
+    category            TEXT NOT NULL,      -- ingredient | packaging | gas | transport | platform_fee | salary | utilities | other
     quantity            REAL,
     unit_raw            TEXT,
     unit                TEXT,               -- canonical, NULL if unknown
@@ -193,6 +196,15 @@ class DB:
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Additive migrations for databases created by earlier versions (never drops data)."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(messages)")}
+        for name, ddl in (("media_url", "TEXT"), ("media_mime", "TEXT"), ("attempts", "INTEGER NOT NULL DEFAULT 1")):
+            if name not in cols:
+                self.conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {ddl}")
+        self.conn.commit()
 
     def execute(self, sql: str, params: Iterable[Any] = ()) -> sqlite3.Cursor:
         return self.conn.execute(sql, tuple(params))

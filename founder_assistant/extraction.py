@@ -13,7 +13,7 @@ from typing import Literal, Optional, Protocol
 
 from pydantic import BaseModel, Field
 
-PROMPT_VERSION = "v1.0"
+PROMPT_VERSION = "v1.1"
 
 DocType = Literal[
     "PURCHASE_BILL",    # mua hàng / hóa đơn nhà cung cấp / phiếu nhập / "đi chợ mua..."
@@ -27,6 +27,11 @@ DocType = Literal[
 ]
 
 
+ExpenseCategory = Literal["ingredient", "packaging", "gas", "transport", "platform_fee", "salary", "utilities", "other"]
+# Goods: have quantity/unit and are price-tracked. Other categories are money-only (no unit required).
+GOODS_CATEGORIES = {"ingredient", "packaging"}
+
+
 class ExtractedItem(BaseModel):
     name: str = Field(description="Tên hàng/món đúng như nguồn ghi (không dịch, không gộp).")
     quantity: Optional[float] = Field(description="Số lượng nếu nguồn ghi/nói rõ, ngược lại null.")
@@ -35,7 +40,11 @@ class ExtractedItem(BaseModel):
     amount: Optional[float] = Field(description="Thành tiền (VND) nếu nguồn ghi rõ. null nếu không ghi — KHÔNG tự nhân.")
     amount_text: Optional[str] = Field(description="Chuỗi tiền gốc của thành tiền đúng như nguồn (vd '450 ngàn', '450.000'). null nếu không có.")
     unit_price_text: Optional[str] = Field(description="Chuỗi đơn giá gốc (vd '90k/kg'). null nếu không có.")
-    category: Literal["NGUYEN_LIEU", "CHI_KHAC"] = Field(description="Chỉ cho mua/chi: NGUYEN_LIEU = hàng hóa/nguyên liệu, CHI_KHAC = điện, nước, gas, lương, thuê... Với bán hàng dùng NGUYEN_LIEU.")
+    category: ExpenseCategory = Field(description=(
+        "Chỉ cho mua/chi: ingredient = nguyên liệu/hàng hóa chế biến; packaging = bao bì, hộp, ly, túi, ống hút; "
+        "gas = gas/bình gas/than; transport = ship, xe, xăng, vận chuyển; platform_fee = phí app (Grab, ShopeeFood...); "
+        "salary = lương, công nhân viên; utilities = điện, nước, internet, rác; other = còn lại (thuê, sửa chữa...). "
+        "Với bán hàng dùng ingredient."))
     evidence: str = Field(description="Trích NGUYÊN VĂN đoạn trong nguồn chứa mặt hàng này (một dòng bill hoặc một cụm câu nói).")
 
 
@@ -86,7 +95,7 @@ Quy tắc bắt buộc — dữ liệu này dùng để báo cáo tiền, sai m�
 5. evidence phải là đoạn trích nguyên văn từ nguồn (với ảnh: từ ocr_text).
 6. Mỗi dòng hàng là một item; không gộp hai mặt hàng, không tách một mặt hàng. Không đưa dòng "Tổng" vào items.
 7. Tên hàng: giữ nguyên như nguồn ("thịt lợn" giữ "thịt lợn"); phần mềm tự chuẩn hóa tên.
-8. Chi phí không phải hàng hóa (điện, nước, gas, lương, thuê, sửa chữa, phí ship) -> category CHI_KHAC; nếu cả tin chỉ có loại chi này dùng doc_type EXPENSE.
+8. Phân loại chi (category): ingredient, packaging, gas, transport, platform_fee, salary, utilities, other. Chi không phải hàng hóa (gas, lương, điện nước, ship, thuê...) không cần số lượng/đơn vị; nếu cả tin chỉ có loại chi này dùng doc_type EXPENSE.
 9. Bill bán hàng/doanh thu: items là các món bán; revenue chứa các trường tổng hợp. Trường nào nguồn không có -> null.
 10. Câu hỏi của Founder về số liệu ("hôm nay chi bao nhiêu", "giá tôm lần gần nhất") -> doc_type QUESTION, điền question, items rỗng. Không trả lời câu hỏi.
 11. Phần mờ/không chắc -> ghi vào unreadable_parts, và để null trường đó thay vì đoán.

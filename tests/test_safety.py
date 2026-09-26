@@ -175,3 +175,186 @@ def test_image_without_ocr_is_not_trusted(h):
     res = h.send(extraction(ocr_text=None, items=[item("Thịt heo", 5, "kg", 450000, evidence="Thịt heo 5kg 450.000")]),
                  image=b"blurry")
     assert res.status == "needs_confirmation"
+
+
+# ------------------------------------------------------------ BUG-003: 8 expense categories, no unit needed
+def test_expense_categories_without_unit(h):
+    res = h.send(extraction("EXPENSE", items=[
+        item("gas", None, None, 500000, category="gas", evidence="gas 500 ngàn", amount_text="500 ngàn"),
+        item("tiền điện", None, None, 1200000, category="utilities", evidence="tiền điện 1tr2", amount_text="1tr2"),
+        item("lương bé Lan", 1, "tháng", 5000000, category="salary", evidence="lương bé Lan 1 tháng 5 triệu", amount_text="5 triệu")]),
+        text="gas 500 ngàn, tiền điện 1tr2, lương bé Lan 1 tháng 5 triệu")
+    assert res.status == "confirmed"
+    assert "đơn vị" not in res.reply
+    assert h.db.one("SELECT COUNT(*) c FROM alerts WHERE code = 'UNIT_UNKNOWN'")["c"] == 0
+    s = daily_summary(h.db, "2026-09-26")
+    assert s.expense_by_category == {"gas": 500000, "utilities": 1200000, "salary": 5000000}
+    assert not any("điện" in m for m in s.missing)
+    assert any("nước" in m for m in s.missing)
+
+
+# ------------------------------------------------------------ BUG-001: synonyms merge, varieties never do
+def test_product_synonyms_and_varieties(h):
+    pm = h.chatbot.products
+    heo = pm.match("thịt heo")
+    assert heo is not None and pm.match("thịt lợn") == heo and pm.match("Heo") == heo
+    ids = {pm.match(n) for n in ("tôm sú", "tôm thẻ", "tôm càng", "tôm")}
+    assert len(ids) == 4 and None not in ids
+    for a, b in (("hành lá", "hành tím"), ("gà ta", "gà công nghiệp"), ("cải xanh", "cải ngọt"),
+                 ("thịt heo nạc", "thịt heo"), ("mực ống", "mực")):
+        assert pm.match(a) is None or pm.match(a) != pm.match(b), (a, b)
+
+
+def test_unmapped_variety_gets_own_product_and_no_price_compare(h):
+    h.send(extraction(items=[item("tôm sú", 1, "kg", 250000, evidence="1kg tôm sú 250k", amount_text="250k")]),
+           text="1kg tôm sú 250k", when="2026-09-25 08:00")
+    res = h.send(extraction(items=[item("tôm thẻ", 1, "kg", 150000, evidence="1kg tôm thẻ 150k", amount_text="150k")]),
+                 text="1kg tôm thẻ 150k")
+    assert res.price_changes == []
+    assert "🆕 Mặt hàng mới: tôm thẻ" not in res.reply  # 'Tôm thẻ' is seeded, so it is known
+    res = h.send(extraction(items=[item("tôm đất", 1, "kg", 180000, evidence="1kg tôm đất 180k", amount_text="180k")]),
+                 text="1kg tôm đất 180k")
+    assert "🆕 Mặt hàng mới: tôm đất" in res.reply and res.price_changes == []
+
+
+# ------------------------------------------------------------ BUG-004 / BUG-005: real retry of failed messages
+class _FakeZalo:
+    def __init__(self):
+        self.sent = []
+
+    def send_text(self, user_id, text):
+        self.sent.append((user_id, text))
+
+
+def _service(h):
+    import threading
+    from founder_assistant.app import Service
+    svc = Service.__new__(Service)
+    svc.s, svc.db, svc.pipeline, svc.zalo, svc.lock = h.settings, h.db, h.pipeline, _FakeZalo(), threading.Lock()
+    return svc
+
+
+def test_failed_download_is_retried_from_stored_url(h):
+    from datetime import datetime
+    from founder_assistant.pipeline import IncomingMessage
+    calls = []
+
+    def flaky_fetch(url):
+        calls.append(url)
+        if len(calls) == 1:
+            raise ConnectionError("zalo cdn timeout")
+        return b"real-bill-bytes", "image/jpeg"
+
+    h.pipeline.fetch_media = flaky_fetch
+    msg = IncomingMessage(zalo_msg_id="z1", user_id="founder", kind="image", media_url="https://cdn/x.jpg",
+                          received_at=datetime(2026, 9, 26, 9, tzinfo=TZ))
+    import pytest
+    with pytest.raises(ConnectionError):
+        h.pipeline.process(msg)
+    assert h.db.one("SELECT media_url, status FROM messages")["media_url"] == "https://cdn/x.jpg"
+
+    h.extractor.queue.append(bill())
+    svc = _service(h)
+    out = svc.retry_failed()
+    assert out[0]["status"] == "confirmed" and calls == ["https://cdn/x.jpg"] * 2
+    assert "M1" in svc.zalo.sent[0][1]
+    assert h.db.one("SELECT attempts, status FROM messages")["attempts"] == 2
+
+
+def test_retry_gives_up_and_tells_founder(h):
+    class Boom:
+        model_name = "x"
+
+        def extract(self, **kw):
+            raise ConnectionError("API down")
+
+    h.pipeline.extractor = Boom()
+    import pytest
+    with pytest.raises(ConnectionError):
+        h.send(None, image=b"bill")
+    svc = _service(h)
+    svc.retry_failed()  # attempt 2 fails
+    svc.retry_failed()  # attempt 3 fails
+    assert h.db.one("SELECT status, attempts FROM messages")["attempts"] == 3
+    assert not svc.zalo.sent
+    svc.retry_failed()  # max reached -> give up and tell the Founder once
+    row = h.db.one("SELECT status, attempts FROM messages")
+    assert row["status"] == "failed_final" and row["attempts"] == 3
+    assert "vẫn chưa xử lý được sau 3 lần thử" in svc.zalo.sent[-1][1]
+    assert svc.retry_failed() == []  # never retried again
+    assert h.db.one("SELECT COUNT(*) c FROM media")["c"] == 1  # raw kept
+
+
+def test_unreadable_is_not_auto_retried(h):
+    from founder_assistant.extraction import ExtractionError
+
+    class Refuse:
+        model_name = "x"
+
+        def extract(self, **kw):
+            raise ExtractionError("AI không trả về dữ liệu hợp lệ.")
+
+    h.pipeline.extractor = Refuse()
+    res = h.send(None, image=b"blurry")
+    assert res.status == "unreadable" and "gửi lại" in res.reply
+    assert _service(h).retry_failed() == []
+
+
+def test_old_database_is_migrated(tmp_path):
+    import sqlite3
+    from founder_assistant.db import DB
+    path = tmp_path / "old.db"
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY, zalo_msg_id TEXT UNIQUE, user_id TEXT, kind TEXT NOT NULL, "
+                "text TEXT, transcript TEXT, received_at TEXT NOT NULL, event_json TEXT, status TEXT NOT NULL DEFAULT 'received', error TEXT)")
+    con.execute("INSERT INTO messages (kind, received_at, text) VALUES ('text', '2026-09-25T08:00:00', 'giữ nguyên')")
+    con.commit()
+    con.close()
+    db = DB(path)
+    row = db.one("SELECT * FROM messages")
+    assert row["text"] == "giữ nguyên" and row["attempts"] == 1 and row["media_url"] is None
+
+
+# ------------------------------------------------------------ BUG-007/008/009: spoken input end-to-end
+def test_spoken_amount_words_confirmed(h):
+    said = "Rau hết một trăm hai."
+    res = h.send(extraction(items=[item("rau", None, None, 120000, amount_text="một trăm hai", evidence="Rau hết một trăm hai")]),
+                 audio=b"v1", transcript=said)
+    assert res.status == "confirmed"
+    assert h.db.one("SELECT amount FROM purchase_items")["amount"] == 120000
+
+
+def test_spoken_amount_misread_is_caught(h):
+    said = "Lấy thêm ba ký tôm, ba trăm sáu chục."
+    res = h.send(extraction(items=[item("tôm", 3, "ký", 3600000, amount_text="ba trăm sáu chục",
+                                        evidence="ba ký tôm, ba trăm sáu chục")]), audio=b"v2", transcript=said)
+    assert res.status == "needs_confirmation"
+
+
+def test_spoken_unit_price_per_kg(h):
+    said = "Mua ba ký ba chỉ giá chín mươi lăm ngàn một ký."
+    res = h.send(extraction(items=[item("ba chỉ", 3, "ký", None, unit_price=95000, unit_price_text="chín mươi lăm ngàn một ký",
+                                        evidence="ba ký ba chỉ giá chín mươi lăm ngàn một ký")]), audio=b"v3", transcript=said)
+    assert res.status == "confirmed"
+    row = h.db.one("SELECT * FROM purchase_items")
+    assert row["amount"] == 285000 and row["amount_source"] == "computed" and row["unit_price_source"] == "source"
+
+
+def test_ki_lo_unit(h):
+    from founder_assistant.units import normalize_unit
+    assert normalize_unit("ki lô").canonical == "kg" and normalize_unit("ki-lô-gam").canonical == "kg"
+
+
+def test_approximate_amount_needs_confirmation(h):
+    said = "Hôm nay đi chợ hết khoảng một triệu hai."
+    res = h.send(extraction(items=[item("đi chợ", None, None, 1200000, amount_text="một triệu hai",
+                                        evidence="đi chợ hết khoảng một triệu hai")]), audio=b"v4", transcript=said)
+    assert res.status == "needs_confirmation" and "ước lượng" in res.reply
+    assert daily_summary(h.db, "2026-09-26").expense is None
+
+
+def test_missing_quantity_still_booked_with_unknown(h):
+    said = "Mua thêm năm ký rau cải."
+    res = h.send(extraction(items=[item("rau cải", 5, "ký", None, evidence="năm ký rau cải")]), audio=b"v5", transcript=said)
+    assert res.status == "confirmed" and "Chưa có giá: rau cải" in res.reply
+    assert h.db.one("SELECT amount FROM purchase_items")["amount"] is None

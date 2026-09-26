@@ -7,14 +7,18 @@ Each item/document ends up with:
 from __future__ import annotations
 
 import hashlib
+import re
 import json
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from .extraction import ExtractedItem, Extraction
-from .money import amounts_match, fmt_vnd, parse_vnd
+from .extraction import GOODS_CATEGORIES, ExtractedItem, Extraction
+from .money import amounts_match, fmt_vnd, money_text_matches
 from .textnorm import compact, norm_key
 from .units import Unit, normalize_unit
+
+
+APPROX_RE = re.compile(r"(?<!\w)(khoảng|tầm|chừng|ước chừng|ước tính|xấp xỉ|gần|hơn)(?!\w)")
 
 
 @dataclass
@@ -96,8 +100,7 @@ def grounded(snippet: str | None, source: str | None) -> bool:
 def number_grounded(value: float, raw_text: str | None, source: str | None) -> bool:
     """The number must be traceable to the source: its raw text appears in the source and parses to it."""
     if raw_text and grounded(raw_text, source):
-        parsed = parse_vnd(raw_text)
-        return parsed is None or amounts_match(parsed, value, 1, 0)
+        return money_text_matches(raw_text, value) is not False
     # fall back: the digits themselves are present in the source
     digits = str(int(round(value)))
     src = compact(source or "")
@@ -145,13 +148,18 @@ def check_item(it: ExtractedItem, source_text: str | None, tol_vnd: float, tol_p
         if value < 0:
             issues.append(Issue("critical", "NEGATIVE", f"'{label}': {what} âm ({fmt_vnd(value)})."))
         if raw:
-            parsed = parse_vnd(raw)
-            if parsed is not None and not amounts_match(parsed, value, 1, 0):
+            if money_text_matches(raw, value) is False:
                 issues.append(Issue("critical", "NUMBER_MISMATCH",
                                     f"'{label}': {what} đọc là {fmt_vnd(value)} nhưng nguồn ghi '{raw}'."))
         if source_text is not None and not number_grounded(value, raw, source_text):
             issues.append(Issue("critical", "NUMBER_NOT_GROUNDED",
                                 f"'{label}': {what} {fmt_vnd(value)} không có trong nguồn gốc."))
+
+    # an estimate said/written by the Founder is not an exact fact -> hold for confirmation
+    approx_in = " ".join(filter(None, [it.evidence, it.amount_text, it.unit_price_text])).lower()
+    if (amount is not None or unit_price is not None) and APPROX_RE.search(approx_in):
+        issues.append(Issue("critical", "APPROXIMATE",
+                            f"'{label}': số tiền là ước lượng ('{APPROX_RE.search(approx_in).group(0).strip()}'), cần xác nhận số chính xác."))
 
     qty = it.quantity
     if qty is not None and qty <= 0:
@@ -160,7 +168,7 @@ def check_item(it: ExtractedItem, source_text: str | None, tol_vnd: float, tol_p
 
     unit = normalize_unit(it.unit)
     # only goods are price-tracked, so only goods need a known unit (gas 'bình', 'tháng' lương... do not)
-    if require_unit and it.category == "NGUYEN_LIEU" and qty is not None and unit is None:
+    if require_unit and it.category in GOODS_CATEGORIES and qty is not None and unit is None:
         issues.append(Issue("warning", "UNIT_UNKNOWN",
                             f"'{label}': không xác định được đơn vị ('{it.unit or 'trống'}') — cần xác nhận, chưa so sánh giá."))
 
@@ -198,8 +206,7 @@ def check_document(ex: Extraction, source_text: str | None, received: date, *,
     stated = ex.stated_total
     if stated is not None:
         if ex.stated_total_text:
-            parsed = parse_vnd(ex.stated_total_text)
-            if parsed is not None and not amounts_match(parsed, stated, 1, 0):
+            if money_text_matches(ex.stated_total_text, stated) is False:
                 issues.append(Issue("critical", "NUMBER_MISMATCH",
                                     f"Tổng đọc là {fmt_vnd(stated)} nhưng nguồn ghi '{ex.stated_total_text}'."))
         if source_text is not None and not number_grounded(stated, ex.stated_total_text, source_text):

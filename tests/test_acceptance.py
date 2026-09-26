@@ -1,6 +1,8 @@
 """Acceptance tests from the spec (§30) — checked on stored data and computed numbers, not just 'API = 200'."""
 from openpyxl import load_workbook
 
+from founder_assistant.analytics import daily_summary
+
 from founder_assistant.report import generate_daily_report
 from tests.conftest import extraction, item, revenue
 
@@ -176,7 +178,7 @@ def full_day(h):
         item("Rau cải", 2, "kg", 48000, amount_text="48.000", evidence="Rau cải 2kg 48.000"),
         item("Hành", None, None, 47000, amount_text="47.000", evidence="Hành 47.000")]),
         image=b"jpeg-market", when="2026-09-26 07:30")
-    h.send(extraction("EXPENSE", items=[item("tiền gas", 1, "bình", 180000, category="CHI_KHAC",
+    h.send(extraction("EXPENSE", items=[item("tiền gas", 1, "bình", 180000, category="gas",
                                              evidence="tiền gas 180 ngàn", amount_text="180 ngàn")]),
            text="trả tiền gas 180 ngàn", when="2026-09-26 10:00")
     ocr = "CHỐT CA\nDoanh thu 3.850.000\nSố bill 42"
@@ -185,20 +187,22 @@ def full_day(h):
     h.send(sales_extraction(), image=b"jpeg-sales", when="2026-09-26 20:05")
 
 
-def test_5_daily_report(h):
+def test_5_daily_report(h, monkeypatch):
+    monkeypatch.setenv("PRIMARY_REVENUE_SOURCE", "pos_closing")  # Founder-confirmed authoritative source
     full_day(h)
     text, path, s = generate_daily_report(h.db, "2026-09-26", h.settings.reports_dir,
                                           datetime(2026, 9, 26, 21, 30, tzinfo=TZ))
     assert s.revenue == 3850000          # chốt ca only; sales bill not double counted
     assert s.expense == 1110000
-    assert s.expense_by_category == {"NGUYEN_LIEU": 930000, "CHI_KHAC": 180000}
+    assert s.expense_by_category == {"ingredient": 930000, "gas": 180000}
     assert s.net == 2740000
     assert s.bill_count == 42
     for fragment in ["FOUNDER DAILY REPORT", "26/09/2026", "3.850.000đ", "1.110.000đ", "+2.740.000đ",
                      "chưa phải lợi nhuận ròng", "⚠️ Thịt heo", "88k → 92k/kg", "+4,55%",
                      "⚠️ Tôm", "118k → 125k/kg", "+5,93%", "↓ Rau cải", "28k → 24k/kg", "-14,29%",
                      "Hủ tiếu xào hải sản: 12 phần", "1 bill chưa xác định được nhà cung cấp",
-                     "Chưa có dữ liệu chi phí điện tháng này", "không cộng thêm để tránh tính trùng"]:
+                     "Chưa có dữ liệu chi phí điện tháng này", "chỉ dùng để đối chiếu, không cộng thêm",
+                     "POS: 3.850.000đ; Bill evidence: 1.535.000đ; Chênh lệch: 2.315.000đ"]:
         assert fragment in text, fragment
     assert "lợi nhuận ròng:" not in text.lower()
 
@@ -223,3 +227,64 @@ def test_5b_empty_day_reports_unknown_not_zero(h):
     text, _, s = generate_daily_report(h.db, "2026-09-26", h.settings.reports_dir, datetime(2026, 9, 26, 21, tzinfo=TZ))
     assert s.revenue is None and s.expense is None and s.net is None
     assert "UNKNOWN — chưa có dữ liệu" in text
+
+
+# ---------------------------------------------------------------- §16-17 revenue reconciliation
+def _pos(h, amount_text, amount, when="2026-09-26 21:00"):
+    ocr = f"CHỐT CA\nDoanh thu {amount_text}"
+    return h.send(extraction("REVENUE_REPORT", ocr_text=ocr, revenue=revenue(gross_revenue=amount)),
+                  image=f"pos-{amount}".encode(), when=when)
+
+
+def _bill(h, name, qty, amount_text, amount, tag):
+    line = f"{name} x{qty} {amount_text}"
+    return h.send(extraction("SALES_BILL", ocr_text=line + f"\nTổng {amount_text}", stated_total=amount,
+                             stated_total_text=amount_text, revenue=revenue(gross_revenue=amount),
+                             items=[item(name, qty, None, amount, amount_text=amount_text, evidence=line)]),
+                  image=tag.encode())
+
+
+def test_revenue_pos_primary_equal_bills_not_doubled(h, monkeypatch):
+    monkeypatch.setenv("PRIMARY_REVENUE_SOURCE", "pos_closing")
+    _bill(h, "Hủ tiếu bò", 50, "3.000.000", 3000000, "b1")
+    _bill(h, "Hủ tiếu hải sản", 30, "2.000.000", 2000000, "b2")
+    _pos(h, "5.000.000", 5000000)
+    s = daily_summary(h.db, "2026-09-26")
+    assert s.revenue == 5000000  # not 10.000.000
+    assert s.extra["reconciliation"]["matched"] is True
+    assert not [a for a in s.alerts if a["code"].startswith("REVENUE_")]
+    assert [n for n, _, _ in s.top_items] == ["Hủ tiếu bò", "Hủ tiếu hải sản"]  # bills still feed item stats
+
+
+def test_revenue_mismatch_alert_numbers_untouched(h, monkeypatch):
+    monkeypatch.setenv("PRIMARY_REVENUE_SOURCE", "pos_closing")
+    _bill(h, "Hủ tiếu bò", 80, "4.850.000", 4850000, "b1")
+    _pos(h, "5.000.000", 5000000)
+    s = daily_summary(h.db, "2026-09-26")
+    assert s.revenue == 5000000
+    msg = next(a["message"] for a in s.alerts if a["code"] == "REVENUE_RECONCILIATION_MISMATCH")
+    assert "POS: 5.000.000đ; Bill evidence: 4.850.000đ; Chênh lệch: 150.000đ. Cần Founder xác nhận" in msg
+
+
+def test_revenue_bills_primary(h, monkeypatch):
+    monkeypatch.setenv("PRIMARY_REVENUE_SOURCE", "sales_bills")
+    _bill(h, "Hủ tiếu bò", 80, "4.850.000", 4850000, "b1")
+    _pos(h, "5.000.000", 5000000)
+    assert daily_summary(h.db, "2026-09-26").revenue == 4850000
+
+
+def test_revenue_source_unset_is_unknown_not_guessed(h, monkeypatch):
+    monkeypatch.delenv("PRIMARY_REVENUE_SOURCE", raising=False)
+    _bill(h, "Hủ tiếu bò", 80, "4.850.000", 4850000, "b1")
+    _pos(h, "5.000.000", 5000000)
+    text, _, s = generate_daily_report(h.db, "2026-09-26", h.settings.reports_dir, datetime(2026, 9, 26, 22, tzinfo=TZ))
+    assert s.revenue is None and s.net is None
+    assert any(a["code"] == "REVENUE_SOURCE_UNSET" and a["severity"] == "critical" for a in s.alerts)
+    assert "chưa xác định nguồn doanh thu chính" in text
+
+
+def test_single_source_day_needs_no_config(h, monkeypatch):
+    monkeypatch.delenv("PRIMARY_REVENUE_SOURCE", raising=False)
+    _pos(h, "5.000.000", 5000000)
+    s = daily_summary(h.db, "2026-09-26")
+    assert s.revenue == 5000000 and s.extra["reconciliation"] is None

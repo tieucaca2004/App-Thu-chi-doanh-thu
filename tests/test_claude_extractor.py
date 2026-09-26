@@ -10,7 +10,7 @@ from founder_assistant.extraction import ClaudeExtractor, ExtractionError
 READ = {
     "doc_type": "PURCHASE_BILL", "ocr_text": None, "document_date": "2026-09-26", "supplier": None,
     "items": [{"name": "thịt heo", "quantity": 5, "unit": "ký", "unit_price": None, "amount": 450000,
-               "amount_text": "450 ngàn", "unit_price_text": None, "category": "NGUYEN_LIEU",
+               "amount_text": "450 ngàn", "unit_price_text": None, "category": "ingredient",
                "evidence": "5 ký thịt heo 450 ngàn"}],
     "stated_total": None, "stated_total_text": None, "revenue": None, "question": None, "unreadable_parts": [],
 }
