@@ -196,6 +196,7 @@ class Pipeline:
     def _record_purchase(self, mid: int, ext_id: int, ex: Extraction, source_text: str | None,
                          received: date, source_kind: str) -> Result:
         doc = self._check(ex, source_text, received)
+        doc.issues += self._price_outliers(doc)
         now = self._now_iso()
         fp = fingerprint("purchase", doc.doc_date, ex.supplier, doc.stated_total or doc.items_total, doc.items)
         dup = self.db.one(
@@ -242,6 +243,28 @@ class Pipeline:
         self.db.commit()
         return Result(reply=self._purchase_reply(ex, doc, ref, status, reason, changes, new_products),
                       record_ref=ref, status=status, price_changes=changes)
+
+    OUTLIER_RATIO = 3.0
+
+    def _price_outliers(self, doc: CheckedDocument) -> list[Issue]:
+        """A unit price >= 3x or <= 1/3 of the last known price of the same product/unit is the signature of a
+        misread zero (90.000 read as 900.000). Consistent misreads pass every arithmetic check, so hold them."""
+        out = []
+        for ci in doc.items:
+            if ci.raw.category not in GOODS_CATEGORIES or ci.unit is None or ci.unit_price_base is None:
+                continue
+            pid = self.products.match(ci.raw.name)
+            prev = pid and self.db.one(
+                """SELECT unit_price_base, price_date FROM price_history WHERE product_id = ? AND base_unit = ?
+                   AND price_date <= ? ORDER BY price_date DESC, id DESC LIMIT 1""", (pid, ci.unit.base, doc.doc_date))
+            if not prev or not prev["unit_price_base"]:
+                continue
+            ratio = ci.unit_price_base / prev["unit_price_base"]
+            if ratio >= self.OUTLIER_RATIO or ratio <= 1 / self.OUTLIER_RATIO:
+                out.append(Issue("critical", "PRICE_OUTLIER",
+                                 f"'{ci.raw.name}': giá {fmt_vnd(ci.unit_price_base)}/{ci.unit.base} gấp {ratio:.1f} lần "
+                                 f"lần trước ({fmt_vnd(prev['unit_price_base'])}, {prev['price_date']}) — có thể đọc sai số 0."))
+        return out
 
     def _apply_prices(self, purchase_id: int) -> list[PriceChange]:
         """Write price_history for a confirmed purchase and return detected price changes."""

@@ -161,7 +161,7 @@ def build_xlsx(db: DB, s: DailySummary, path: Path) -> Path:
     _sheet(wb, "SALES",
            ["Ngày", "Món", "Số lượng", "Đơn giá", "Thành tiền", "Tính vào doanh thu", "Mã chứng từ", "Tin nhắn", "Trích nguồn"],
            [[r["date"], r["name"], _u(r["quantity"]), _u(r["unit_price"]), _u(r["amount"]),
-             "Có" if r["counted"] else "Không (đã có báo cáo chốt ca)", r["ref"], f"msg#{r['message_id']}", r["evidence"]]
+             "Có" if r["counted"] else "Không — chỉ đối chiếu (không phải nguồn doanh thu chính)", r["ref"], f"msg#{r['message_id']}", r["evidence"]]
             for r in s.sale_rows],
            money_cols=(4, 5))
 
@@ -220,9 +220,22 @@ def _price_source(db: DB, ph_id: int) -> str:
 
 
 def _source_rows(db: DB, s: DailySummary) -> list[list]:
-    mids = sorted({r["message_id"] for r in s.purchase_rows + s.sale_rows}
-                  | {a["message_id"] for a in s.alerts if a["message_id"]}
-                  | {p["message_id"] for p in s.pending})
+    mids = ({r["message_id"] for r in s.purchase_rows + s.sale_rows}
+            | {a["message_id"] for a in s.alerts if a["message_id"]}
+            | {p["message_id"] for p in s.pending})
+    # every record behind a headline number (a POS closing has no line items but IS the revenue source)
+    for ref in s.revenue_refs + s.expense_refs + (s.extra.get("reconciliation") or {}).get("pos_refs", []) \
+            + (s.extra.get("reconciliation") or {}).get("bill_refs", []):
+        row = db.one(f"SELECT message_id FROM {'purchases' if ref[0] == 'M' else 'sales'} WHERE id = ?", (int(ref[1:]),))
+        if row:
+            mids.add(row["message_id"])
+    for c in s.price_changes:  # both the old and the new price
+        for ph in (c.old_ref, c.new_ref):
+            row = db.one("SELECT ae.message_id FROM price_history ph JOIN ai_extractions ae ON ae.id = ph.extraction_id "
+                         "WHERE ph.id = ?", (ph,))
+            if row:
+                mids.add(row["message_id"])
+    mids = sorted(mids)
     rows = []
     for mid in mids:
         m = db.one("SELECT * FROM messages WHERE id = ?", (mid,))

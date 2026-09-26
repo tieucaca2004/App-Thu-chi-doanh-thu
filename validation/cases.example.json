@@ -1,0 +1,275 @@
+{
+ "_readme": "Xem validation/README.md. Thay mọi TODO bằng giá trị đọc tận mắt từ chứng từ gốc (null nếu chứng từ không ghi). Copy file này thành validation/cases.json.",
+ "primary_revenue_source": "pos_closing",
+ "cases": [
+  {
+   "id": "V01",
+   "kind": "voice",
+   "file": "cases/voice/v01.m4a",
+   "sent_at": "2026-10-01 07:00",
+   "said": "Hôm nay mua năm ký thịt heo hết bốn trăm năm chục ngàn.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "doc_type": "PURCHASE_BILL",
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "thịt heo",
+      "quantity": 5,
+      "unit": "kg",
+      "unit_price": 90000,
+      "amount": 450000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V02",
+   "kind": "voice",
+   "file": "cases/voice/v02.m4a",
+   "sent_at": "2026-10-01 07:30",
+   "said": "Lấy thêm ba ký tôm, ba trăm sáu chục.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "tôm",
+      "quantity": 3,
+      "unit": "kg",
+      "unit_price": 120000,
+      "amount": 360000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V03",
+   "kind": "voice",
+   "file": "cases/voice/v03.m4a",
+   "sent_at": "2026-10-01 08:00",
+   "said": "Rau hết một trăm hai.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "rau",
+      "quantity": null,
+      "unit": null,
+      "amount": 120000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V04",
+   "kind": "voice",
+   "file": "cases/voice/v04.m4a",
+   "sent_at": "2026-10-01 08:30",
+   "said": "Mua hai thùng nước ngọt hết ba trăm.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "nước ngọt",
+      "quantity": 2,
+      "unit": "thùng",
+      "unit_price": 150000,
+      "amount": 300000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V05",
+   "kind": "voice",
+   "file": "cases/voice/v05.m4a",
+   "sent_at": "2026-10-01 09:00",
+   "said": "Hôm nay đi chợ hết khoảng một triệu hai.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "needs_confirmation"
+   }
+  },
+  {
+   "id": "V06",
+   "kind": "voice",
+   "file": "cases/voice/v06.m4a",
+   "sent_at": "2026-10-01 09:30",
+   "said": "Mua ba ký ba chỉ giá chín mươi lăm ngàn một ký.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "ba chỉ",
+      "quantity": 3,
+      "unit": "kg",
+      "unit_price": 95000,
+      "amount": 285000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V07",
+   "kind": "voice",
+   "file": "cases/voice/v07.m4a",
+   "sent_at": "2026-10-01 10:00",
+   "said": "Mua thêm năm ký rau cải.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "rau cải",
+      "quantity": 5,
+      "unit": "kg",
+      "unit_price": null,
+      "amount": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "V08",
+   "kind": "voice",
+   "file": "cases/voice/v08.m4a",
+   "sent_at": "2026-10-01 10:30",
+   "said": "Thịt heo hôm nay tăng giá, lấy hai ký hết hai trăm ngàn.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "thịt heo",
+      "quantity": 2,
+      "unit": "kg",
+      "unit_price": 100000,
+      "amount": 200000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V09",
+   "kind": "voice",
+   "file": "cases/voice/v09.m4a",
+   "sent_at": "2026-10-01 11:00",
+   "said": "Mua ba ký, à không, bốn ký cá lóc hết ba trăm hai.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "cá lóc",
+      "quantity": 4,
+      "unit": "kg",
+      "unit_price": 80000,
+      "amount": 320000
+     }
+    ]
+   }
+  },
+  {
+   "id": "V10",
+   "kind": "voice",
+   "file": "cases/voice/v10.m4a",
+   "sent_at": "2026-10-01 11:30",
+   "said": "Mua hai ký mực hai trăm tám, một bó hành mười ngàn, gas năm trăm ngàn.",
+   "conditions": "TODO: nói nhanh/chậm, ngoài đường, ồn...",
+   "expected": {
+    "status": "confirmed",
+    "items": [
+     {
+      "product": "mực",
+      "quantity": 2,
+      "unit": "kg",
+      "amount": 280000
+     },
+     {
+      "product": "hành",
+      "quantity": 1,
+      "unit": "bó",
+      "amount": 10000
+     },
+     {
+      "product": "gas",
+      "amount": 500000
+     }
+    ]
+   }
+  },
+  {
+   "id": "B01",
+   "kind": "image",
+   "file": "cases/bills/b01.jpg",
+   "sent_at": "2026-10-01 12:00",
+   "conditions": "bill mua thịt, chụp thật, không chỉnh sửa",
+   "expected": {
+    "doc_type": "PURCHASE_BILL",
+    "date": "TODO YYYY-MM-DD hoặc null",
+    "supplier": "TODO hoặc null",
+    "total": "TODO số hoặc null",
+    "items": [
+     {
+      "product": "TODO",
+      "quantity": "TODO",
+      "unit": "TODO",
+      "unit_price": "TODO hoặc null",
+      "amount": "TODO hoặc null"
+     }
+    ]
+   }
+  },
+  {
+   "id": "B01-resend",
+   "kind": "image",
+   "file": "cases/bills/b01.jpg",
+   "sent_at": "2026-10-01 12:05",
+   "tags": [
+    "duplicate"
+   ],
+   "expected": {
+    "status": "duplicate"
+   }
+  },
+  {
+   "id": "POS01",
+   "kind": "image",
+   "file": "cases/bills/pos01.jpg",
+   "sent_at": "2026-10-01 21:00",
+   "expected": {
+    "doc_type": "REVENUE_REPORT",
+    "total": "TODO",
+    "bill_count": "TODO hoặc null",
+    "cash": "TODO hoặc null",
+    "bank_transfer": "TODO hoặc null"
+   }
+  }
+ ],
+ "expected_price_changes": [
+  {
+   "case": "V08",
+   "product": "thịt heo",
+   "date": "2026-10-01",
+   "old": 90000,
+   "new": 100000,
+   "diff": 10000,
+   "pct": 11.11
+  }
+ ],
+ "expected_reports": [
+  {
+   "date": "2026-10-01",
+   "revenue": "TODO",
+   "expense": "TODO",
+   "net": "TODO",
+   "forbidden_phrases": [
+    "lợi nhuận ròng:"
+   ]
+  }
+ ]
+}

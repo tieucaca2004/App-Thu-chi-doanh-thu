@@ -217,6 +217,8 @@ def test_5_daily_report(h, monkeypatch):
     # traceability: "Tôm +5,93%" -> which bill, which message, which original file
     assert pc["Tôm"][9].startswith("M2 / msg#2") and pc["Tôm"][8].startswith("M1 / msg#1")
     sources = {r[0]: r for r in wb["SOURCES"].iter_rows(min_row=2, values_only=True)}
+    # BUG-011: the POS closing (msg#4, source of the whole revenue) and the old price bill (msg#1) are listed
+    assert {"msg#1", "msg#2", "msg#3", "msg#4", "msg#5"} <= set(sources)
     assert sources["msg#2"][4].endswith(".jpg") and len(sources["msg#2"][5]) == 64
     purchase = list(wb["PURCHASE"].iter_rows(min_row=2, values_only=True))
     hanh = next(r for r in purchase if r[2] == "Hành")

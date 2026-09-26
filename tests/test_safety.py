@@ -358,3 +358,19 @@ def test_missing_quantity_still_booked_with_unknown(h):
     res = h.send(extraction(items=[item("rau cải", 5, "ký", None, evidence="năm ký rau cải")]), audio=b"v5", transcript=said)
     assert res.status == "confirmed" and "Chưa có giá: rau cải" in res.reply
     assert h.db.one("SELECT amount FROM purchase_items")["amount"] is None
+
+
+# ------------------------------------------------------------ BUG-010: consistent x10 misread
+def test_consistent_x10_misread_is_held(h):
+    h.send(extraction(items=[item("thịt heo", 5, "kg", 450000, evidence="5kg thịt heo 450k", amount_text="450k")]),
+           text="5kg thịt heo 450k", when="2026-09-25 08:00")
+    ocr = "Thịt heo 5kg 4.600.000\nTổng 4.600.000"
+    res = h.send(extraction(ocr_text=ocr, stated_total=4600000, stated_total_text="4.600.000",
+                            items=[item("Thịt heo", 5, "kg", 4600000, amount_text="4.600.000", evidence="Thịt heo 5kg 4.600.000")]),
+                 image=b"bill-x10")
+    assert res.status == "needs_confirmation" and "sai số 0" in res.reply
+    assert daily_summary(h.db, "2026-09-26").expense is None
+    # a real +20% move is still booked normally
+    res = h.send(extraction(items=[item("thịt heo", 5, "kg", 540000, evidence="5kg thịt heo 540k", amount_text="540k")]),
+                 text="5kg thịt heo 540k")
+    assert res.status == "confirmed"
