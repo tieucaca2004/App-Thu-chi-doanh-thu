@@ -48,6 +48,7 @@ REQUIRED = {
                 "FOUNDER_ZALO_USER_ID"],
     "Report download": ["PUBLIC_BASE_URL", "REPORT_LINK_SECRET"],
     "Zalo webhook": ["PUBLIC_BASE_URL", "ZALO_OA_SECRET_KEY"],
+    "Job endpoints": ["JOBS_TOKEN"],
     "STT": ["STT_URL"],
     "Revenue source": ["PRIMARY_REVENUE_SOURCE"],
 }

@@ -8,7 +8,54 @@ Ngày: 2026-09-26 · Nhánh: `claude/gallant-pascal-jphd3b`
 
 ---
 
-# PHASE 4 — REAL DATA EXECUTION & PRODUCTION GATE (trạng thái mới nhất)
+# MASTER EXECUTION — PRODUCTION GATE (trạng thái mới nhất)
+
+> **NOT PRODUCTION READY.** Dataset thật và credential bên ngoài vẫn chưa có, nên mọi critical path dữ liệu thật đều BLOCKED/NOT RUN.
+> Security audit (§17) chạy được độc lập trên **server HTTP thật chạy local** và phát hiện **2 lỗi P0 đã tái hiện được**
+> (BUG-014, BUG-015). Cả hai đã sửa tối thiểu, có regression test, và đã chạy lại exploit trên server.
+
+Baseline: `5027e76` (code = `592c95d`), nhánh `claude/gallant-pascal-jphd3b`, tree sạch, 118/118 → **BASELINE VERIFIED, CODE FROZEN**.
+Sau khi sửa: **123/123 PASS** (synthetic/regression).
+
+| Area | Total | PASS | FAIL | PARTIAL | NOT RUN | BLOCKED |
+|------|------:|-----:|-----:|--------:|--------:|--------:|
+| Voice | 10 | 0 | 0 | 0 | 10 | 0 |
+| Bills | 20 | 0 | 0 | 0 | 20 | 0 |
+| POS | 1 | 0 | 0 | 0 | 1 | 0 |
+| Revenue reconciliation | 1 | 0 | 0 | 0 | 1 | 0 |
+| Price history | 0 | 0 | 0 | 0 | 0 | 0 |
+| Chatbot grounding | 6 | 0 | 0 | 0 | 6 | 0 |
+| Report | 1 | 0 | 0 | 0 | 1 | 0 |
+| Traceability | 0 | 0 | 0 | 0 | 0 | 0 |
+| Zalo E2E | 7 | 0 | 0 | 0 | 0 | 7 |
+| Security (local server, config evidence) | 11 | 9 | 2 → fixed | 0 | 0 | 0 |
+
+Security checks trên server local (uvicorn thật, secret test cục bộ):
+S1 webhook không chữ ký → 401 ✓ · S2 sai chữ ký → 401 ✓ · S3 JSON hỏng → 400 ✓ · S4 người lạ (chữ ký hợp lệ) → bỏ qua ✓ ·
+S5 replay cùng `msg_id` → lưu 1 lần ✓ · S6 `/dev/message` mặc định tắt → 404 ✓ · S7 link báo cáo sai chữ ký → 403 ✓ ·
+S10 path traversal `..%2F..%2Fetc%2Fpasswd` → 404, không lộ ✓ ·
+**S8/S11 `/jobs/*` không xác thực → 200 + lộ toàn bộ text báo cáo tài chính ✗ (BUG-014)** ·
+**S9 link tải giả bằng secret mặc định công khai `change-me` → 200, tải được XLSX ✗ (BUG-015)**.
+Sau khi sửa: S8/S11/S9 → 503, không lộ dữ liệu; S1 vẫn 401.
+
+| BUG | Case | Symptom | Expected | Actual | Root cause | Minimal fix | Regression | Result |
+|---|---|---|---|---|---|---|---|---|
+| 014 (P0) | S8, S11 | Ai gọi được `PUBLIC_BASE_URL` đều lấy được báo cáo tài chính và kích hoạt xử lý/gửi tin | Endpoint job cần xác thực | 200 + text báo cáo | `/jobs/*` không có kiểm soát truy cập | Bearer `JOBS_TOKEN`; chưa đặt → 503 (scheduler nội bộ không đi qua HTTP nên không ảnh hưởng) | `tests/test_security.py` (fail 5/5 trên code cũ, pass trên fix) | FIXED, exploit chạy lại → 503 |
+| 015 (P0) | S9 | Link tải báo cáo giả được | Không thể giả chữ ký | 200, tải XLSX | Secret mặc định `change-me` là công khai (repo public) | Secret rỗng/mặc định → không tạo link, download 503 | `test_default_report_secret_cannot_be_forged[change-me/""]`, `test_real_secret_download_works` | FIXED, exploit chạy lại → 503 |
+
+Secret audit toàn bộ lịch sử git (5 commit): **không có secret**. Các match đều là false positive: code `zalo_msg_id=`, placeholder `change-me`, giá trị test `"secret"`.
+`.gitignore`: `.env`, voice/bill/POS thật, `cases.json`, `validation/real/out`, `validation/out`, `data/` (DB, media, reports) đều bị ignore (đã kiểm từng đường dẫn).
+Giới hạn còn lại (không phải bug theo spec hiện tại): media tải từ URL trong webhook đã ký, không giới hạn kích thước; link báo cáo không có thời hạn.
+
+Còn thiếu để qua gate (theo mức độ):
+1. **BLOCKED**: `ANTHROPIC_API_KEY`; Zalo OA (`ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_SECRET`, `FOUNDER_ZALO_USER_ID`); `STT_URL` (+ key); `PUBLIC_BASE_URL` đã đăng ký webhook trong Zalo console; `REPORT_LINK_SECRET` ngẫu nhiên; `JOBS_TOKEN`; ffmpeg trên server production.
+2. **NOT RUN** (thiếu dữ liệu Founder): 10 voice, 20 bill, 1 POS chốt ca (cùng ngày với vài bill bán lẻ), `validation/real/cases.json` do Founder xác nhận. Kéo theo: revenue reconciliation, price history, chatbot grounding, report XLSX, traceability trên dữ liệu thật.
+3. **FAIL**: không còn FAIL mở.
+4. **PARTIAL**: không có.
+
+---
+
+# PHASE 4 — REAL DATA EXECUTION & PRODUCTION GATE
 
 > **Production Gate: NOT READY.** Phase 4 không chạy được bước thật nào: dataset thật của Founder chưa được cung cấp
 > và các credential bên ngoài vẫn thiếu. Code **FROZEN** tại `592c95d`; không có thay đổi code nào vì không có bằng chứng FAIL thực tế.

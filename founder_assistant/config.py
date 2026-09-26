@@ -32,6 +32,13 @@ class Settings:
 
     public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL"))
     report_link_secret: str = field(default_factory=lambda: _env("REPORT_LINK_SECRET", "change-me"))
+    # Bearer token for the HTTP job endpoints (/jobs/*). Empty -> endpoints disabled (fail closed).
+    jobs_token: str = field(default_factory=lambda: _env("JOBS_TOKEN"))
+
+    @property
+    def report_links_enabled(self) -> bool:
+        # the repository is public: the default secret is known to everyone -> links would be forgeable
+        return bool(self.report_link_secret) and self.report_link_secret != "change-me"
 
     # Validation thresholds
     price_alert_pct: float = 20.0          # |change| >= this -> "tăng/giảm quá mạnh"

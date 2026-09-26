@@ -87,7 +87,7 @@ class Service:
         return done
 
     def report_link(self, day: str) -> str | None:
-        if not self.s.public_base_url:
+        if not self.s.public_base_url or not self.s.report_links_enabled:
             return None
         return f"{self.s.public_base_url.rstrip('/')}/reports/{day}.xlsx?sig={sign(day, self.s.report_link_secret)}"
 
@@ -174,20 +174,33 @@ def create_app(settings: Settings | None = None, service: Service | None = None,
         background.add_task(svc.handle, msg)  # answer Zalo fast; process after responding
         return {"accepted": msg.zalo_msg_id}
 
+    def require_jobs_token(request: Request) -> None:
+        """BUG-014: job endpoints return financial data and trigger messages -> bearer token, fail closed."""
+        token = holder["svc"].s.jobs_token
+        if not token:
+            raise HTTPException(503, "job endpoints disabled (JOBS_TOKEN not set)")
+        got = request.headers.get("Authorization", "")
+        if not hmac.compare_digest(got.encode(), f"Bearer {token}".encode()):
+            raise HTTPException(401, "unauthorized")
+
     @app.post("/jobs/daily-report")
-    def run_daily_report(day: str | None = None, send: bool = True):
+    def run_daily_report(request: Request, day: str | None = None, send: bool = True):
+        require_jobs_token(request)
         if day:
             date.fromisoformat(day)
         return holder["svc"].daily_report(day, send=send)
 
     @app.post("/jobs/reprocess-failed")
-    def reprocess_failed():
+    def reprocess_failed(request: Request):
+        require_jobs_token(request)
         """Manual trigger of the same retry the background loop runs every RETRY_INTERVAL_SECONDS."""
         return {"reprocessed": holder["svc"].retry_failed()}
 
     @app.get("/reports/{day}.xlsx")
     def download_report(day: str, sig: str):
         svc: Service = holder["svc"]
+        if not svc.s.report_links_enabled:  # BUG-015: default/empty secret -> forgeable -> disabled
+            raise HTTPException(503, "report download disabled (REPORT_LINK_SECRET not set)")
         if not hmac.compare_digest(sig, sign(day, svc.s.report_link_secret)):
             raise HTTPException(403, "bad signature")
         path = svc.s.reports_dir / f"Founder-Daily-Report-{date.fromisoformat(day).isoformat()}.xlsx"

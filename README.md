@@ -55,7 +55,7 @@ uvicorn founder_assistant.app:app --host 0.0.0.0 --port 8000
 - Access token Zalo tự refresh khi hết hạn (cần `ZALO_APP_SECRET` + `ZALO_REFRESH_TOKEN`).
 - **Voice**: Claude không nhận audio, nên cần một dịch vụ STT tương thích Whisper (`STT_URL`, ví dụ faster-whisper server tự host
   hoặc API `/v1/audio/transcriptions`). Chưa cấu hình → voice vẫn được lưu và bot nhờ Founder gõ lại.
-- **Báo cáo**: tự chạy lúc `DAILY_REPORT_TIME` (mặc định 21:30, giờ VN). Có thể gọi tay `POST /jobs/daily-report?day=2026-09-26`.
+- **Báo cáo**: tự chạy lúc `DAILY_REPORT_TIME` (mặc định 21:30, giờ VN). Có thể gọi tay `POST /jobs/daily-report?day=2026-09-26` với header `Authorization: Bearer $JOBS_TOKEN` (không đặt `JOBS_TOKEN` → endpoint tắt). Link tải báo cáo chỉ hoạt động khi `REPORT_LINK_SECRET` là giá trị ngẫu nhiên, không phải mặc định.
   Zalo OA không gửi được file .xlsx, nên bot gửi link tải có chữ ký (`PUBLIC_BASE_URL`); file luôn nằm trong `DATA_DIR/reports/`.
 - Model mặc định `claude-opus-5` (đổi bằng `CLAUDE_MODEL`), bật server-side fallback khi model từ chối.
 - Thử nhanh không cần Zalo: `DEV_ENDPOINTS=1`, rồi `curl -X POST localhost:8000/dev/message -d '{"text":"mua 5 ký thịt heo 450 ngàn"}' -H 'content-type: application/json'`.

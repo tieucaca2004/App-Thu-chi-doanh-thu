@@ -53,7 +53,7 @@ Mỗi con số: báo cáo → M/B record → extraction → message → file g�
 
 ## 6. Zalo E2E thật (§25)
 Với webhook thật: gửi text, ảnh, voice; gửi lại cùng ảnh; gửi nội dung vô nghĩa; tắt `ANTHROPIC_API_KEY` tạm thời (AI lỗi → `failed` → tự thử lại);
-đặt `STT_URL` sai (STT lỗi → `needs_transcription`, bot nhờ gõ lại); `POST /jobs/daily-report` rồi mở link tải có chữ ký, và thử link sai chữ ký (phải 403).
+đặt `STT_URL` sai (STT lỗi → `needs_transcription`, bot nhờ gõ lại); `POST /jobs/daily-report` (header `Authorization: Bearer $JOBS_TOKEN`; không token → 401) rồi mở link tải có chữ ký, và thử link sai chữ ký (phải 403).
 
 ## 7. Ghi bug
 Mỗi case FAIL/PARTIAL → một mục trong `REAL-WORLD-VALIDATION.md` §14:
