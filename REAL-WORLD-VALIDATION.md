@@ -8,7 +8,59 @@ Ngày: 2026-09-26 · Nhánh: `claude/gallant-pascal-jphd3b`
 
 ---
 
-# MASTER EXECUTION — PRODUCTION GATE (trạng thái mới nhất)
+# PHASE 5 — REAL-WORLD VALIDATION EXECUTION (trạng thái mới nhất)
+
+**Kết quả: B) REAL VALIDATION BLOCKED — PRECISE INPUTS REQUIRED.** Dừng sau preflight theo §22. Không có dữ liệu giả, không đổi code.
+
+| Mục | Giá trị |
+|---|---|
+| Execution timestamp | 2026-09-26 (Asia/Ho_Chi_Minh) |
+| Baseline commit | `bbfbaa0` = origin; tree sạch; **123/123 PASS** (đã xác nhận trước khi làm) |
+| Final commit | commit docs-only của Phase 5 (xem `git log`); code không đổi so với `bbfbaa0` |
+| Dataset | **BLOCKED**: `validation/real/` có 0 voice, 0 bill, 0 POS; **không có `cases.json`** (không tạo, vì không được bịa ground truth; template sẵn có ở `validation/cases.example.json`) |
+
+Preflight (không in giá trị secret):
+
+| Dependency | Trạng thái |
+|---|---|
+| ANTHROPIC_API_KEY | NOT CONFIGURED → BLOCKED |
+| STT_URL | NOT CONFIGURED → BLOCKED |
+| STT_API_KEY | NOT CONFIGURED (tùy provider) |
+| ZALO_APP_ID, ZALO_OA_SECRET_KEY, ZALO_ACCESS_TOKEN, ZALO_REFRESH_TOKEN, ZALO_APP_SECRET, FOUNDER_ZALO_USER_ID | NOT CONFIGURED → BLOCKED |
+| PUBLIC_BASE_URL | NOT CONFIGURED → BLOCKED |
+| REPORT_LINK_SECRET | còn mặc định → BLOCKED (download bị tắt theo BUG-015) |
+| JOBS_TOKEN | NOT CONFIGURED → BLOCKED (`/jobs/*` tắt theo BUG-014) |
+| PRIMARY_REVENUE_SOURCE | PASS (`pos_closing`) |
+| ffmpeg | PASS (6.1.1, trong container phiên này) |
+| SQLite write | PASS (probe tạo/ghi/xóa) |
+| Media path `data/media`, report path `data/reports` | PASS (ghi được; đã dọn probe) |
+| validation/real/ | tồn tại, chỉ có README |
+| .gitignore | PASS: `.env`, `data/` (DB, media, reports), voice/bill/`cases.json`/`out` thật đều bị ignore |
+
+| Area | PASS | PARTIAL | FAIL | NOT RUN | BLOCKED |
+|---|--:|--:|--:|--:|--:|
+| Voice (10) | 0 | 0 | 0 | 10 | 0 |
+| Bills (20) | 0 | 0 | 0 | 20 | 0 |
+| POS (1) | 0 | 0 | 0 | 1 | 0 |
+| Revenue reconciliation (1) | 0 | 0 | 0 | 1 | 0 |
+| Price history | 0 | 0 | 0 | NOT RUN (không có purchase thật) | 0 |
+| Chatbot grounding (6) | 0 | 0 | 0 | 6 | 0 |
+| Report XLSX (1) | 0 | 0 | 0 | 1 | 0 |
+| Traceability | 0 | 0 | 0 | NOT RUN (không có DB thật) | 0 |
+| Zalo E2E (7) | 0 | 0 | 0 | 0 | 7 |
+
+Security regression: **NOT REQUIRED** (không đổi code); lần kiểm chứng trước ở `bbfbaa0`.
+Bugs discovered: 0 · Bugs fixed: 0 · Tests: baseline 123, new regression 0, total **123/123 PASS**.
+Production Gate: **NOT PRODUCTION READY**.
+
+Inputs cần có để chạy (chính xác):
+1. Credential (đặt trong `.env` hoặc biến môi trường của server, không commit): `ANTHROPIC_API_KEY`, `STT_URL` (+`STT_API_KEY` nếu provider cần), `ZALO_APP_ID`, `ZALO_OA_SECRET_KEY`, `ZALO_ACCESS_TOKEN`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_SECRET`, `FOUNDER_ZALO_USER_ID`, `PUBLIC_BASE_URL` (đã đăng ký webhook `/webhook/zalo` trong Zalo console), `REPORT_LINK_SECRET` (ngẫu nhiên, dài), `JOBS_TOKEN`.
+2. Dataset trong `validation/real/` (gitignored): `voice/v01…v10` (giọng Founder thật), `bills/b01…b20.jpg` (ảnh thật, không chỉnh sửa), `bills/pos01.jpg` (chốt ca POS **cùng ngày** với ít nhất vài bill bán lẻ).
+3. `validation/real/cases.json`: ground truth do **Founder** xác nhận cho từng file (ngày, sản phẩm, số lượng, đơn vị, đơn giá, thành tiền, tổng, nhà cung cấp, nhóm chi, doanh thu, exact/uncertain). Trường chứng từ không có → `null`.
+
+---
+
+# MASTER EXECUTION — PRODUCTION GATE
 
 > **NOT PRODUCTION READY.** Dataset thật và credential bên ngoài vẫn chưa có, nên mọi critical path dữ liệu thật đều BLOCKED/NOT RUN.
 > Security audit (§17) chạy được độc lập trên **server HTTP thật chạy local** và phát hiện **2 lỗi P0 đã tái hiện được**
